@@ -33,7 +33,7 @@ public class BoardManager : MonoBehaviour
                 GameObject cell = Instantiate(PiecesPatterns[pieceIndex], m_Grid.GetCellCenterWorld(new Vector3Int(x, y, 0)), Quaternion.identity);
                 m_Cell[x, y] = cell;
 
-                Debug.Log("Groudtile: " + groundIndex + " PieceTile: " + pieceIndex);
+                //Debug.Log("Groudtile: " + groundIndex + " PieceTile: " + pieceIndex);
             }
         }
     }

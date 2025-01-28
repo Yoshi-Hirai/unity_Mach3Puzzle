@@ -1,8 +1,7 @@
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-
-public class GridManager : MonoBehaviour
+public class BoardManager : MonoBehaviour
 {
     public int Width;
     public int Height;

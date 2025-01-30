@@ -18,6 +18,8 @@ public class BoardManager : MonoBehaviour
 
     // ピースが消えたことにより落下するピースの情報リスト
     private List<(GameObject piece, Vector2Int from, Vector2Int to)> fallingPieces = new List<(GameObject, Vector2Int, Vector2Int)>();
+    //  新しく生成されたピースの情報リスト
+    private List<(GameObject piece, Vector2Int from, Vector2Int to)> createPieces = new List<(GameObject, Vector2Int, Vector2Int)>();
     
     // 落下アニメーションをコルーチンで実行
     private IEnumerator AnimateFallingPieces()
@@ -74,21 +76,19 @@ public class BoardManager : MonoBehaviour
                 }
             }
 
+            // 新しいピースを補充チェック
+            for (int y = 0; y < Height; y++)
+            {
+                if (m_Cell[x, y] == null)
+                {
+                    AddPieceToGrid(x, y);
+                }
+            }
         }
 
         // すべての落下処理をアニメーションで実行
         StartCoroutine(AnimateFallingPieces());
 
-        // 上部から新しいピースを補充
-/*
-        for (int y = height - 1; y >= 0; y--)
-        {
-            if (grid[x, y] == null)
-            {
-                AddPieceToGrid(x, y);
-            }
-        }
-*/
     }
 
     // ピースを生成してグリッドに登録

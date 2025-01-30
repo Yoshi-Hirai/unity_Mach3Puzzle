@@ -91,14 +91,23 @@ public class BoardManager : MonoBehaviour
 */
     }
 
+    // ピースを生成してグリッドに登録
+    private void AddPieceToGrid(int x, int y)
+    {
+        int pieceIndex = UnityEngine.Random.Range(0, PiecesPatterns.Length);
+        GameObject cell = Instantiate(PiecesPatterns[pieceIndex], m_Grid.GetCellCenterWorld(new Vector3Int(x, y, 0)), Quaternion.identity);
+        m_Cell[x, y] = cell;
+    }
+
     // transform.position <=> m_cellインデックス変換
     public Vector2Int ConvertFromTransformToCell(Vector3 transformposition)
     {
-        return new Vector2Int( Mathf.FloorToInt(transformposition.x), Mathf.FloorToInt(transformposition.y) );
+        Vector3Int cellPosition = m_Grid.WorldToCell(transformposition);
+        return new Vector2Int(cellPosition.x, cellPosition.y);
     }
     public Vector3 ConvertFromCellToTransform(Vector2Int cellindex)
     {
-        return new Vector3( (float)cellindex.x + 0.5f, (float)cellindex.y + 0.5f, 0 );
+        return m_Grid.GetCellCenterWorld(new Vector3Int(cellindex.x, cellindex.y, 0));
     }
 
     // セルデータ(m_Cell)を入れ替える
@@ -193,9 +202,7 @@ public class BoardManager : MonoBehaviour
                 m_Tilemap.SetTile(new Vector3Int(x, y, 0), GrounPatterns[groundIndex]);
 
                 // ピースを生成し登録
-                int pieceIndex = UnityEngine.Random.Range(0, PiecesPatterns.Length);
-                GameObject cell = Instantiate(PiecesPatterns[pieceIndex], m_Grid.GetCellCenterWorld(new Vector3Int(x, y, 0)), Quaternion.identity);
-                m_Cell[x, y] = cell;
+                AddPieceToGrid(x, y);
 
                 //Debug.Log("Groudtile: " + groundIndex + " PieceTile: " + pieceIndex);
             }

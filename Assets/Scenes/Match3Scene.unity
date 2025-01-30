@@ -268,7 +268,7 @@ GameObject:
   - component: {fileID: 404037438}
   - component: {fileID: 404037437}
   m_Layer: 0
-  m_Name: GridManager
+  m_Name: BoardManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -283,16 +283,22 @@ MonoBehaviour:
   m_GameObject: {fileID: 404037436}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 62b891a099a26c046bc4143541b98538, type: 3}
+  m_Script: {fileID: 11500000, guid: 037ae2bf5a049f342a7e6ea918a5a171, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   Width: 8
   Height: 8
-  GroundTiles:
+  GrounPatterns:
   - {fileID: 11400000, guid: d66c928eb6ef8b9488f30a5206d28313, type: 2}
   - {fileID: 11400000, guid: 2a7022884d92ed8498f251d2e0a7ced4, type: 2}
   - {fileID: 11400000, guid: 35b3d3dc637156943811d46a48a62769, type: 2}
   - {fileID: 11400000, guid: 98a7def848b36d84abd9dcf57c63f838, type: 2}
+  PiecesPatterns:
+  - {fileID: 8092733299759008618, guid: 855196ea900d5c94e80d12d13db0e014, type: 3}
+  - {fileID: 5536987936649595673, guid: 337a7ad05178cc840bb301a7d519918e, type: 3}
+  - {fileID: 2325192869959088272, guid: acb438ec3185ce74991f23808fef7489, type: 3}
+  - {fileID: 6917760276053865067, guid: fad0b41307b3744408e4038da09565b4, type: 3}
+  - {fileID: 3811108895378533964, guid: f54beff5ab4bae24db8988fa03831a3e, type: 3}
 --- !u!156049354 &404037438
 Grid:
   m_ObjectHideFlags: 0

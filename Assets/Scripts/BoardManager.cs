@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.Tilemaps;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 
 public class BoardManager : MonoBehaviour
@@ -15,9 +16,37 @@ public class BoardManager : MonoBehaviour
     private Tilemap m_Tilemap;              // 背景タイルの表示
     private Grid m_Grid;
 
+    // ピースが消えたことにより落下するピースの情報リスト
+    private List<(GameObject piece, Vector2Int from, Vector2Int to)> fallingPieces = new List<(GameObject, Vector2Int, Vector2Int)>();
+    
+    // 落下アニメーションをコルーチンで実行
+    private IEnumerator AnimateFallingPieces()
+    {
+        // [TODO] 落下速度の変数がちらばっているのでPieceControllerにまとめる
+        float fallSpeed = 5f; // 落下速度
+        int runningCoroutines = fallingPieces.Count;    //  落下するピースの数
+
+        foreach (var (piece, from, to) in fallingPieces)
+        {
+            Vector3 startPos = ConvertFromCellToTransform(from);
+            Vector3 endPos = ConvertFromCellToTransform(to);
+
+            StartCoroutine(piece.GetComponent<PieceController>().SmoothMove(piece.GetComponent<PieceController>().transform, endPos, fallSpeed, () =>
+                {
+                    runningCoroutines--;
+                }));
+        }
+
+        // 全てのコルーチンが終わるのを待つ
+        yield return new WaitUntil(() => runningCoroutines == 0);
+        Debug.Log("Animation Done!");
+    }    
+
     // セル更新（下方向に移動して補充）
     private void updateCell()
     {
+        fallingPieces.Clear(); // 落ちるピースのリストを初期化
+
         for (int x = 0; x < Width; x++)
         {
             // 下から上に向かって確認
@@ -32,9 +61,12 @@ public class BoardManager : MonoBehaviour
                         if (m_Cell[x, aboveY] != null)
                         {
                             Debug.Log("Bury: " + x + "," + aboveY + " => " + x + "," + y);
-                            // ピースを下に移動
+
+                            // ピース移動情報をリストに記録
+                            fallingPieces.Add((m_Cell[x, aboveY], new Vector2Int(x, aboveY), new Vector2Int(x, y)));
+
+                            // データだけ先に更新（表示は後でアニメーション）
                             m_Cell[x, y] = m_Cell[x, aboveY];
-                            m_Cell[x, aboveY].transform.position = ConvertFromCellToTransform( new Vector2Int(x, y) );
                             m_Cell[x, aboveY] = null;
                             break;
                         }
@@ -42,20 +74,24 @@ public class BoardManager : MonoBehaviour
                 }
             }
 
-            // 上部から新しいピースを補充
-/*
-            for (int y = height - 1; y >= 0; y--)
-            {
-                if (grid[x, y] == null)
-                {
-                    AddPieceToGrid(x, y);
-                }
-            }
-*/
         }
+
+        // すべての落下処理をアニメーションで実行
+        StartCoroutine(AnimateFallingPieces());
+
+        // 上部から新しいピースを補充
+/*
+        for (int y = height - 1; y >= 0; y--)
+        {
+            if (grid[x, y] == null)
+            {
+                AddPieceToGrid(x, y);
+            }
+        }
+*/
     }
 
-    // ransform.position <=> m_cellインデックス変換
+    // transform.position <=> m_cellインデックス変換
     public Vector2Int ConvertFromTransformToCell(Vector3 transformposition)
     {
         return new Vector2Int( Mathf.FloorToInt(transformposition.x), Mathf.FloorToInt(transformposition.y) );

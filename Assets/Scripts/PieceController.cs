@@ -39,7 +39,7 @@ public class PieceController : MonoBehaviour
 
     // ピース移動の補間処理
     // Vector3.Lerp を使用して位置を徐々に移動。目標位置に近づいたらループを終了し、最後に位置を固定。
-    private IEnumerator SmoothMove(Transform movingPiece, Vector3 targetPosition, float speed, System.Action onComplete)
+    public IEnumerator SmoothMove(Transform movingPiece, Vector3 targetPosition, float speed, System.Action onComplete)
     {
         while (Vector3.Distance(movingPiece.position, targetPosition) > 0.01f)
         {
@@ -58,15 +58,14 @@ public class PieceController : MonoBehaviour
         Vector3 originalPos = transform.position;   //  現在の位置
         Vector3 targetPos = targetPiece.position;   //  入れ替え先の位置
 
-        // 入れ替え移動が完了したらピースマッチチェックを呼び出す
         // [Todo] 処理負荷の懸念があるので、GameManagerなどにインスタンス化をしておく対応をする)
         BoardManager boardManager = FindFirstObjectByType<BoardManager>();
         if (boardManager == null) {
             throw new Exception("BoardManager is Null.");
         }
-
         // 内部データ(m_cell配列)を更新
-        boardManager.SwapCellData(originalPos, targetPos);        
+        boardManager.SwapCellData(originalPos, targetPos);
+        // 入れ替え移動アニメーションを行い、完了したらピースマッチチェックを呼び出す
         StartCoroutine(SmoothMove(transform, targetPos, moveSpeed, boardManager.PieceMatchCheck));
         StartCoroutine(SmoothMove(targetPiece, originalPos, moveSpeed, null));
     }

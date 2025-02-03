@@ -52,7 +52,6 @@ public class BoardManager : MonoBehaviour
 
         // 全てのコルーチンが終わるのを待つ
         yield return new WaitUntil(() => runningCoroutines == 0);
-        Debug.Log("Animation Done! List:" + listId);
     }    
 
     // セル更新（下方向に移動して補充）
@@ -68,13 +67,13 @@ public class BoardManager : MonoBehaviour
             {
                 if (m_Cell[x, y] == null) // 空のスペースがある場合
                 {
-                    Debug.Log("Space: " + x + "," + y);
+                    //Debug.Log("Space: " + x + "," + y);
                     // 現在より上部からピースを探して移動
                     for (int aboveY = y + 1; aboveY < Height; aboveY++)
                     {
                         if (m_Cell[x, aboveY] != null)
                         {
-                            Debug.Log("Bury: " + x + "," + aboveY + " => " + x + "," + y);
+                            //Debug.Log("Bury: " + x + "," + aboveY + " => " + x + "," + y);
 
                             // ピース移動情報をリストに記録
                             fallingPieces.Add((m_Cell[x, aboveY], new Vector2Int(x, aboveY), new Vector2Int(x, y)));
@@ -94,7 +93,7 @@ public class BoardManager : MonoBehaviour
             {
                 if (m_Cell[x, y] == null)
                 {
-                    Debug.Log("Create: " + x + "," + y);
+                    //Debug.Log("Create: " + x + "," + y);
 
                     AddPieceToGrid(x, y);
                     // ピース補充情報をリストに記録 & 不可視化
@@ -137,7 +136,6 @@ public class BoardManager : MonoBehaviour
         Vector2Int index1 = ConvertFromTransformToCell(pos1);
         Vector2Int index2 = ConvertFromTransformToCell(pos2);
 
-        Debug.Log("1: " + index1.x + "," + index1.y + " 2: " + index2.x + "," + index2.y);
         // グリッドデータをスワップ
         GameObject temp = m_Cell[index1.x, index1.y];
         m_Cell[index1.x, index1.y] = m_Cell[index2.x, index2.y];
@@ -199,7 +197,7 @@ public class BoardManager : MonoBehaviour
 
             // 先にm_CellをnullにしてからDestroy
             m_Cell[x, y] = null;
-            Debug.Log("Delete: " + x + "," + y);
+            //Debug.Log("Delete: " + x + "," + y);
             Destroy(piece);
         }
 

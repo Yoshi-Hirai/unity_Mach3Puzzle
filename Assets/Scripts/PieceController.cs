@@ -49,7 +49,7 @@ public class PieceController : MonoBehaviour
         }
         movingPiece.position = targetPosition; // 最後に位置を固定
 
-        // コルーチン終了時にコールバックを実行
+        // コルーチン終了時にコールバックを実行(設定されていれば)
         onComplete?.Invoke();
     }
 
@@ -88,7 +88,7 @@ public class PieceController : MonoBehaviour
         if (targetPiece)
         {
             // ピースを入れ替える
-            Debug.Log("Swap: (" + transform.position.x + "," + transform.position.y + ") <=> (" + targetPiece.transform.position.x + "," + targetPiece.transform.position.y);
+            //Debug.Log("Swap: (" + transform.position.x + "," + transform.position.y + ") <=> (" + targetPiece.transform.position.x + "," + targetPiece.transform.position.y);
             SwapPosition(targetPiece.transform);
         }
     }

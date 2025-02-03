@@ -22,18 +22,29 @@ public class BoardManager : MonoBehaviour
     private List<(GameObject piece, Vector2Int from, Vector2Int to)> createPieces = new List<(GameObject, Vector2Int, Vector2Int)>();
     
     // 落下アニメーションをコルーチンで実行
-    private IEnumerator AnimateFallingPieces()
+    private IEnumerator AnimateFallingPieces(int listId)
     {
+        List<(GameObject piece, Vector2Int from, Vector2Int to)> animtaionPieceList = fallingPieces;
+        if (listId == 1) {
+            animtaionPieceList = createPieces;
+        }
+
         // [TODO] 落下速度の変数がちらばっているのでPieceControllerにまとめる
         float fallSpeed = 5f; // 落下速度
-        int runningCoroutines = fallingPieces.Count;    //  落下するピースの数
+        int runningCoroutines = animtaionPieceList.Count;    //  落下するピースの数
 
-        foreach (var (piece, from, to) in fallingPieces)
+        foreach (var (piece, from, to) in animtaionPieceList)
         {
             Vector3 startPos = ConvertFromCellToTransform(from);
             Vector3 endPos = ConvertFromCellToTransform(to);
+            PieceController pieceController = piece.GetComponent<PieceController>();
+            if( pieceController == null ){
+                throw new Exception("PieceController is Null.");
+            }
 
-            StartCoroutine(piece.GetComponent<PieceController>().SmoothMove(piece.GetComponent<PieceController>().transform, endPos, fallSpeed, () =>
+            // GameObjectを可視化(すでに可視設定になっているオブジェクトも再設定)
+            pieceController.GetComponent<Renderer>().enabled = true;
+            StartCoroutine(pieceController.SmoothMove(pieceController.transform, startPos, endPos, fallSpeed, () =>
                 {
                     runningCoroutines--;
                 }));
@@ -41,13 +52,14 @@ public class BoardManager : MonoBehaviour
 
         // 全てのコルーチンが終わるのを待つ
         yield return new WaitUntil(() => runningCoroutines == 0);
-        Debug.Log("Animation Done!");
+        Debug.Log("Animation Done! List:" + listId);
     }    
 
     // セル更新（下方向に移動して補充）
-    private void updateCell()
+    private IEnumerator updateCell()
     {
-        fallingPieces.Clear(); // 落ちるピースのリストを初期化
+        fallingPieces.Clear();  // 落ちるピースのリストを初期化
+        createPieces.Clear();   // 生成されるピースのリストを初期化
 
         for (int x = 0; x < Width; x++)
         {
@@ -77,17 +89,25 @@ public class BoardManager : MonoBehaviour
             }
 
             // 新しいピースを補充チェック
+            int numAddPiece = 0;
             for (int y = 0; y < Height; y++)
             {
                 if (m_Cell[x, y] == null)
                 {
+                    Debug.Log("Create: " + x + "," + y);
+
                     AddPieceToGrid(x, y);
+                    // ピース補充情報をリストに記録 & 不可視化
+                    createPieces.Add((m_Cell[x, y], new Vector2Int(x, Height + numAddPiece), new Vector2Int(x, y)));
+                    m_Cell[x,y].GetComponent<Renderer>().enabled = false;
+                    numAddPiece++;
                 }
             }
         }
 
         // すべての落下処理をアニメーションで実行
-        StartCoroutine(AnimateFallingPieces());
+        yield return StartCoroutine(AnimateFallingPieces(0));
+        yield return StartCoroutine(AnimateFallingPieces(1));
 
     }
 
@@ -183,7 +203,7 @@ public class BoardManager : MonoBehaviour
             Destroy(piece);
         }
 
-        updateCell();
+        StartCoroutine(updateCell());
     }
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created

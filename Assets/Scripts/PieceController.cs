@@ -67,7 +67,7 @@ public class PieceController : MonoBehaviour
         // 内部データ(m_cell配列)を更新
         boardManager.SwapCellData(originalPos, targetPos);
         // 入れ替え移動アニメーションを行い、完了したらピースマッチチェックを呼び出す
-        StartCoroutine(SmoothMove(transform, transform.position, targetPos, boardManager.PieceMatchCheck));
+        StartCoroutine(SmoothMove(transform, transform.position, targetPos, () => StartCoroutine(boardManager.PieceMatchCheckUpdate())));
         StartCoroutine(SmoothMove(targetPiece, targetPiece.position, originalPos, null));
     }
 

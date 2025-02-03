@@ -141,7 +141,7 @@ public class BoardManager : MonoBehaviour
     }
     
     // 横・縦方向にピースをチェック
-    public void PieceMatchCheck()
+    public List<GameObject> PieceMatchCheck()
     {
         List<GameObject> matchedPieces = new List<GameObject>();
 
@@ -185,21 +185,32 @@ public class BoardManager : MonoBehaviour
             }
         }
 
-        // マッチしたピースを削除
-        foreach (var piece in matchedPieces)
-        {
-            // 座標を取得
-            Vector3 pos = piece.transform.position;
-            int x = (int)Math.Floor(pos.x);
-            int y = (int)Math.Floor(pos.y);
+        return matchedPieces;
+    }
 
-            // 先にm_CellをnullにしてからDestroy
-            m_Cell[x, y] = null;
-            //Debug.Log("Delete: " + x + "," + y);
-            Destroy(piece);
-        }
+    // 横・縦方向にピースをチェックして、セル情報を更新(アニメーションこみ)
+    public IEnumerator PieceMatchCheckUpdate()
+    {
+        List<GameObject> matchedPieces;
+        do {
+            matchedPieces = PieceMatchCheck();
 
-        StartCoroutine(updateCell());
+            // マッチしたピースを削除して、セル情報を更新
+            foreach (var piece in matchedPieces)
+            {
+                // 座標を取得
+                Vector3 pos = piece.transform.position;
+                int x = (int)Math.Floor(pos.x);
+                int y = (int)Math.Floor(pos.y);
+
+                // 先にm_CellをnullにしてからDestroy
+                m_Cell[x, y] = null;
+                //Debug.Log("Delete: " + x + "," + y);
+                Destroy(piece);
+            }
+
+            yield return StartCoroutine(updateCell());
+        } while (matchedPieces.Count > 0 );
     }
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created

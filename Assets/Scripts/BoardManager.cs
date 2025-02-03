@@ -29,8 +29,6 @@ public class BoardManager : MonoBehaviour
             animtaionPieceList = createPieces;
         }
 
-        // [TODO] 落下速度の変数がちらばっているのでPieceControllerにまとめる
-        float fallSpeed = 5f; // 落下速度
         int runningCoroutines = animtaionPieceList.Count;    //  落下するピースの数
 
         foreach (var (piece, from, to) in animtaionPieceList)
@@ -44,7 +42,7 @@ public class BoardManager : MonoBehaviour
 
             // GameObjectを可視化(すでに可視設定になっているオブジェクトも再設定)
             pieceController.GetComponent<Renderer>().enabled = true;
-            StartCoroutine(pieceController.SmoothMove(pieceController.transform, startPos, endPos, fallSpeed, () =>
+            StartCoroutine(pieceController.SmoothMove(pieceController.transform, startPos, endPos, () =>
                 {
                     runningCoroutines--;
                 }));
@@ -96,7 +94,7 @@ public class BoardManager : MonoBehaviour
                     //Debug.Log("Create: " + x + "," + y);
 
                     AddPieceToGrid(x, y);
-                    // ピース補充情報をリストに記録 & 不可視化
+                    // ピース補充情報をリストに記録 & 不可視化(アニメーションを開始する時に可視化)
                     createPieces.Add((m_Cell[x, y], new Vector2Int(x, Height + numAddPiece), new Vector2Int(x, y)));
                     m_Cell[x,y].GetComponent<Renderer>().enabled = false;
                     numAddPiece++;

@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.Tilemaps;
+using UnityEngine.InputSystem;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -16,10 +17,38 @@ public class BoardManager : MonoBehaviour
     private Tilemap m_Tilemap;              // 背景タイルの表示
     private Grid m_Grid;
 
+    private Vector2 startPos;               //  スワイプ開始位置
+    private Vector2 endPos;                 //  スワイプ終了位置
+    private PieceController selectedPiece;  // スワイプ開始時に選択したピース
+
     // ピースが消えたことにより落下するピースの情報リスト
     private List<(GameObject piece, Vector2Int from, Vector2Int to)> fallingPieces = new List<(GameObject, Vector2Int, Vector2Int)>();
     //  新しく生成されたピースの情報リスト
     private List<(GameObject piece, Vector2Int from, Vector2Int to)> createPieces = new List<(GameObject, Vector2Int, Vector2Int)>();
+    
+    private void SwapPieces(PieceController piece, Vector2 swipeDirection)
+    {
+        float swipeThreshold = 0.5f; // スワイプの判定閾値
+        Vector2Int direction = Vector2Int.zero;
+
+        if (Mathf.Abs(swipeDirection.x) > swipeThreshold || Mathf.Abs(swipeDirection.y) > swipeThreshold)
+        {
+            // スワイプ方向を判定
+            if (Mathf.Abs(swipeDirection.x) > Mathf.Abs(swipeDirection.y))
+            {
+                // 左右スワイプ
+                direction = (swipeDirection.x > 0) ? Vector2Int.right : Vector2Int.left;
+            }
+            else
+            {
+                // 上下スワイプ
+                direction = (swipeDirection.y > 0) ? Vector2Int.up : Vector2Int.down;
+            }
+
+            //Debug.Log($"Swap {piece.gameObject.name} to {direction}");
+            piece.SwapWithNeighbor(direction); // PieceController にスワップ処理を実装
+        }
+    }
     
     // 落下アニメーションをコルーチンで実行
     private IEnumerator AnimateFallingPieces(int listId)
@@ -194,6 +223,7 @@ public class BoardManager : MonoBehaviour
         List<GameObject> matchedPieces;
         do {
             matchedPieces = PieceMatchCheck();
+            Debug.Log("MatchPiece Start: " + matchedPieces.Count );
 
             // マッチしたピースを削除して、セル情報を更新
             foreach (var piece in matchedPieces)
@@ -239,6 +269,76 @@ public class BoardManager : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        
+        //  タッチ or クリックを検出
+        //  ?? false → タッチデバイスが存在しない場合は false にする
+        bool isTouchStart = Touchscreen.current?.primaryTouch.press.wasPressedThisFrame ?? false;
+        bool isTouchEnd = Touchscreen.current?.primaryTouch.press.wasReleasedThisFrame ?? false;
+        bool isClickStart = Mouse.current?.leftButton.wasPressedThisFrame ?? false;
+        bool isClickEnd = Mouse.current?.leftButton.wasReleasedThisFrame ?? false;
+
+        // タッチ or クリック開始
+        if (isTouchStart || isClickStart)
+        {
+            //  入力位置の取得（タッチ or マウス）
+            Vector2 inputPos = isTouchStart
+                ? Touchscreen.current.primaryTouch.position.ReadValue()
+                : Mouse.current.position.ReadValue();
+
+            // 2D
+            // スクリーン座標をワールド座標に変換
+            Vector2 worldPos = Camera.main.ScreenToWorldPoint(inputPos);
+            startPos = worldPos;    // スワイプ開始位置を保存
+
+            //  2D用の Raycast を使用(「指定した座標にオブジェクトがあるか」調べる)
+            //  Physics2D.Raycast(Vector2 origin, Vector2 direction, float distance, int layerMask);
+            //  origin	Ray の開始位置（ワールド座標）
+            //  direction	Ray の飛ぶ方向（通常は Vector2.zero で「その点」をチェック）
+            //  distance	Ray の距離（通常は Mathf.Infinity）
+            //  layerMask	当たり判定のレイヤー（~0 なら全レイヤー）
+            RaycastHit2D hit = Physics2D.Raycast(worldPos, Vector2.zero);
+
+            if (hit.collider != null) // ヒットしたオブジェクトがあるかチェック
+            {
+                selectedPiece = hit.collider.GetComponent<PieceController>();
+                if (selectedPiece != null)
+                {
+                    selectedPiece.OnTouch();
+                }
+            }
+            
+            // 3D
+            /*
+            //  カメラから `inputPos` に向けて Ray を飛ばす
+            Ray ray = Camera.main.ScreenPointToRay(inputPos);
+            RaycastHit hit;
+
+            //  Ray がオブジェクトに当たったか判定
+            if (Physics.Raycast(ray, out hit))
+            {
+                PieceController piece = hit.collider.GetComponent<PieceController>();
+                if (piece != null)
+                {
+                    piece.OnTouch(); // ピースにタッチ処理を通知
+                }
+            }
+            */
+        }
+
+        // タッチ or クリック終了（リリース）
+        if ((isTouchEnd || isClickEnd) && selectedPiece != null)
+        {
+            Vector2 inputPos = isTouchEnd
+                ? Touchscreen.current.primaryTouch.position.ReadValue()
+                : Mouse.current.position.ReadValue();
+
+            Vector2 worldPos = Camera.main.ScreenToWorldPoint(inputPos);
+            endPos = worldPos; // スワイプ終了位置を保存
+
+            // SwapPieces関数内でスワイプ方向を判定
+            Vector2 swipeDirection = endPos - startPos;
+            SwapPieces(selectedPiece, swipeDirection);
+
+            selectedPiece = null; // 選択解除
+        }
     }
 }

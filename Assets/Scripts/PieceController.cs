@@ -4,38 +4,12 @@ using System.Collections;
 
 public class PieceController : MonoBehaviour
 {
-    private Vector2 startPos;
-    private Vector2 endPos;
-
     // マウスホバー時の明度アップ
     private SpriteRenderer spriteRenderer;
     private Color originalColor;
 
     private float swipeThreshold = 0.5f; // スワイプの判定閾値
     private float moveSpeed = 5f; // 移動速度
-
-    // スワイプ方向を検知する
-    private void DetectSwipe()
-    {
-        Vector2 swipeDelta = endPos - startPos;
-
-        if (Mathf.Abs(swipeDelta.x) > swipeThreshold || Mathf.Abs(swipeDelta.y) > swipeThreshold)
-        {
-            // スワイプ方向を判定
-            if (Mathf.Abs(swipeDelta.x) > Mathf.Abs(swipeDelta.y))
-            {
-                // 左右スワイプ
-                if (swipeDelta.x > 0) Swap(Vector2.right); // 右
-                else Swap(Vector2.left); // 左
-            }
-            else
-            {
-                // 上下スワイプ
-                if (swipeDelta.y > 0) Swap(Vector2.up); // 上
-                else Swap(Vector2.down); // 下
-            }
-        }
-    }
 
     // ピース移動の補間処理
     // Vector3.Lerp を使用して位置を徐々に移動。目標位置に近づいたらループを終了し、最後に位置を固定。
@@ -53,7 +27,23 @@ public class PieceController : MonoBehaviour
         onComplete?.Invoke();
     }
 
-    // ピース交換処理
+    //  [TODO]SwapWithNeighborとSwapPositionをまとめるリファクタリングを検討
+    //  ピース交換処理(外部)
+    public void SwapWithNeighbor(Vector2Int direction)
+    {
+        Vector2 targetPosition = (Vector2)transform.position + (Vector2)direction;
+        RaycastHit2D hit = Physics2D.Raycast(targetPosition, Vector2.zero);
+        
+        if (hit.collider != null)
+        {
+            PieceController otherPiece = hit.collider.GetComponent<PieceController>();
+            if (otherPiece != null)
+            {
+                SwapPosition(otherPiece.transform);
+            }
+        }
+    }
+    // ピース交換処理(内部)
     public void SwapPosition(Transform targetPiece)
     {
         Vector3 originalPos = transform.position;   //  現在の位置
@@ -103,18 +93,26 @@ public class PieceController : MonoBehaviour
         spriteRenderer.color = originalColor; // 元の色に戻す
     }
     
+    // [TODO]Touch&Click対応
     void OnMouseDown()
     {
         spriteRenderer.color = originalColor * 1.25f; // 少し明るくする
-        startPos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-        //Debug.Log("MouseDown: " + startPos.x + " , " + startPos.y);
     }
 
+    // [TODO]Touch&Click対応
     void OnMouseUp()
     {
         spriteRenderer.color = originalColor; // 元の色に戻す
-        endPos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-        DetectSwipe();
+    }
+
+    public void OnTouch()
+    {
+        Debug.Log("タッチ処理を実行: " + gameObject.name);
+    }
+
+    public void OnRelease()
+    {
+        Debug.Log("リリース処理を実行: " + gameObject.name);
     }
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
@@ -127,6 +125,6 @@ public class PieceController : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        
+
     }
 }

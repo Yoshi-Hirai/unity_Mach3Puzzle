@@ -8,7 +8,6 @@ public class PieceController : MonoBehaviour
     private SpriteRenderer spriteRenderer;
     private Color originalColor;
 
-    private float swipeThreshold = 0.5f; // スワイプの判定閾値
     private float moveSpeed = 5f; // 移動速度
 
     // ピース移動の補間処理
@@ -33,7 +32,7 @@ public class PieceController : MonoBehaviour
     {
         Vector2 targetPosition = (Vector2)transform.position + (Vector2)direction;
         RaycastHit2D hit = Physics2D.Raycast(targetPosition, Vector2.zero);
-        
+
         if (hit.collider != null)
         {
             PieceController otherPiece = hit.collider.GetComponent<PieceController>();
@@ -51,7 +50,8 @@ public class PieceController : MonoBehaviour
 
         // [Todo] 処理負荷の懸念があるので、GameManagerなどにインスタンス化をしておく対応をする)
         BoardManager boardManager = FindFirstObjectByType<BoardManager>();
-        if (boardManager == null) {
+        if (boardManager == null)
+        {
             throw new Exception("BoardManager is Null.");
         }
         // 内部データ(m_cell配列)を更新
@@ -92,7 +92,7 @@ public class PieceController : MonoBehaviour
     {
         spriteRenderer.color = originalColor; // 元の色に戻す
     }
-    
+
     // [TODO]Touch&Click対応
     void OnMouseDown()
     {

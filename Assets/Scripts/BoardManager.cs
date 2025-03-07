@@ -25,7 +25,7 @@ public class BoardManager : MonoBehaviour
     private List<(GameObject piece, Vector2Int from, Vector2Int to)> fallingPieces = new List<(GameObject, Vector2Int, Vector2Int)>();
     //  新しく生成されたピースの情報リスト
     private List<(GameObject piece, Vector2Int from, Vector2Int to)> createPieces = new List<(GameObject, Vector2Int, Vector2Int)>();
-    
+
     private void SwapPieces(PieceController piece, Vector2 swipeDirection)
     {
         float swipeThreshold = 0.5f; // スワイプの判定閾値
@@ -49,12 +49,13 @@ public class BoardManager : MonoBehaviour
             piece.SwapWithNeighbor(direction); // PieceController にスワップ処理を実装
         }
     }
-    
+
     // 落下アニメーションをコルーチンで実行
     private IEnumerator AnimateFallingPieces(int listId)
     {
         List<(GameObject piece, Vector2Int from, Vector2Int to)> animtaionPieceList = fallingPieces;
-        if (listId == 1) {
+        if (listId == 1)
+        {
             animtaionPieceList = createPieces;
         }
 
@@ -65,7 +66,8 @@ public class BoardManager : MonoBehaviour
             Vector3 startPos = ConvertFromCellToTransform(from);
             Vector3 endPos = ConvertFromCellToTransform(to);
             PieceController pieceController = piece.GetComponent<PieceController>();
-            if( pieceController == null ){
+            if (pieceController == null)
+            {
                 throw new Exception("PieceController is Null.");
             }
 
@@ -79,7 +81,9 @@ public class BoardManager : MonoBehaviour
 
         // 全てのコルーチンが終わるのを待つ
         yield return new WaitUntil(() => runningCoroutines == 0);
-    }    
+        // チェック候補
+        //Debug.Log("List " + listId + " remain " + runningCoroutines);
+    }
 
     // セル更新（下方向に移動して補充）
     private IEnumerator updateCell()
@@ -125,7 +129,7 @@ public class BoardManager : MonoBehaviour
                     AddPieceToGrid(x, y);
                     // ピース補充情報をリストに記録 & 不可視化(アニメーションを開始する時に可視化)
                     createPieces.Add((m_Cell[x, y], new Vector2Int(x, Height + numAddPiece), new Vector2Int(x, y)));
-                    m_Cell[x,y].GetComponent<Renderer>().enabled = false;
+                    m_Cell[x, y].GetComponent<Renderer>().enabled = false;
                     numAddPiece++;
                 }
             }
@@ -168,62 +172,92 @@ public class BoardManager : MonoBehaviour
         m_Cell[index1.x, index1.y] = m_Cell[index2.x, index2.y];
         m_Cell[index2.x, index2.y] = temp;
     }
-    
+
     // 横・縦方向にピースをチェック
     public List<GameObject> PieceMatchCheck()
     {
-        List<GameObject> matchedPieces = new List<GameObject>();
+        HashSet<GameObject> matchedPieces = new HashSet<GameObject>(); // 重複を防ぐため HashSet を使用
 
         // 横方向のチェック
         for (int y = 0; y < Height; y++)
         {
-            for (int x = 0; x < Width - 2; x++)
+            int matchCount = 1; // 連続しているピースの数
+            List<GameObject> tempMatches = new List<GameObject>();
+            tempMatches.Add(m_Cell[0, y]);
+
+            for (int x = 1; x < Width; x++)
             {
-                if (m_Cell[x, y] != null &&
-                    m_Cell[x + 1, y] != null &&
-                    m_Cell[x + 2, y] != null)
+                if (m_Cell[x, y] != null && m_Cell[x - 1, y] != null &&
+                    m_Cell[x, y].tag == m_Cell[x - 1, y].tag)
                 {
-                    if (m_Cell[x, y].tag == m_Cell[x + 1, y].tag &&
-                        m_Cell[x, y].tag == m_Cell[x + 2, y].tag)
-                    {
-                        matchedPieces.Add(m_Cell[x, y]);
-                        matchedPieces.Add(m_Cell[x + 1, y]);
-                        matchedPieces.Add(m_Cell[x + 2, y]);
-                    }
+                    matchCount++;
+                    tempMatches.Add(m_Cell[x, y]);
                 }
+                else
+                {
+                    if (matchCount >= 3) // 3つ以上並んでいたら追加
+                    {
+                        foreach (var piece in tempMatches)
+                            matchedPieces.Add(piece);
+                    }
+                    matchCount = 1;
+                    tempMatches.Clear();
+                    tempMatches.Add(m_Cell[x, y]);
+                }
+            }
+
+            if (matchCount >= 3) // ループ終了時もチェック
+            {
+                foreach (var piece in tempMatches)
+                    matchedPieces.Add(piece);
             }
         }
 
         // 縦方向のチェック
         for (int x = 0; x < Width; x++)
         {
-            for (int y = 0; y < Height - 2; y++)
+            int matchCount = 1;
+            List<GameObject> tempMatches = new List<GameObject>();
+            tempMatches.Add(m_Cell[x, 0]);
+
+            for (int y = 1; y < Height; y++)
             {
-                if (m_Cell[x, y] != null &&
-                    m_Cell[x, y + 1] != null &&
-                    m_Cell[x, y + 2] != null)
+                if (m_Cell[x, y] != null && m_Cell[x, y - 1] != null &&
+                    m_Cell[x, y].tag == m_Cell[x, y - 1].tag)
                 {
-                    if (m_Cell[x, y].tag == m_Cell[x, y + 1].tag &&
-                        m_Cell[x, y].tag == m_Cell[x, y + 2].tag)
-                    {
-                        matchedPieces.Add(m_Cell[x, y]);
-                        matchedPieces.Add(m_Cell[x, y + 1]);
-                        matchedPieces.Add(m_Cell[x, y + 2]);
-                    }
+                    matchCount++;
+                    tempMatches.Add(m_Cell[x, y]);
                 }
+                else
+                {
+                    if (matchCount >= 3)
+                    {
+                        foreach (var piece in tempMatches)
+                            matchedPieces.Add(piece);
+                    }
+                    matchCount = 1;
+                    tempMatches.Clear();
+                    tempMatches.Add(m_Cell[x, y]);
+                }
+            }
+
+            if (matchCount >= 3)
+            {
+                foreach (var piece in tempMatches)
+                    matchedPieces.Add(piece);
             }
         }
 
-        return matchedPieces;
+        return new List<GameObject>(matchedPieces);
     }
 
     // 横・縦方向にピースをチェックして、セル情報を更新(アニメーションこみ)
     public IEnumerator PieceMatchCheckUpdate()
     {
         List<GameObject> matchedPieces;
-        do {
+        do
+        {
             matchedPieces = PieceMatchCheck();
-            Debug.Log("MatchPiece Start: " + matchedPieces.Count );
 
             // マッチしたピースを削除して、セル情報を更新
             foreach (var piece in matchedPieces)
@@ -235,12 +269,12 @@ public class BoardManager : MonoBehaviour
 
                 // 先にm_CellをnullにしてからDestroy
                 m_Cell[x, y] = null;
-                //Debug.Log("Delete: " + x + "," + y);
+                Debug.Log("Delete: " + x + "," + y);
                 Destroy(piece);
             }
 
             yield return StartCoroutine(updateCell());
-        } while (matchedPieces.Count > 0 );
+        } while (matchedPieces.Count > 0);
     }
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
@@ -252,7 +286,7 @@ public class BoardManager : MonoBehaviour
 
         for (int y = 0; y < Height; ++y)
         {
-            for(int x = 0; x < Width; ++x)
+            for (int x = 0; x < Width; ++x)
             {
                 //　背景タイルを生成
                 int groundIndex = UnityEngine.Random.Range(0, GrounPatterns.Length);
@@ -305,7 +339,7 @@ public class BoardManager : MonoBehaviour
                     selectedPiece.OnTouch();
                 }
             }
-            
+
             // 3D
             /*
             //  カメラから `inputPos` に向けて Ray を飛ばす

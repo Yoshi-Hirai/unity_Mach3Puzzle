@@ -10,7 +10,8 @@ public class PieceController : MonoBehaviour
 
     private float moveSpeed = 5f; // 移動速度
 
-    // ピース移動の補間処理
+# if false
+// ピース移動の補間処理
     // Vector3.Lerp を使用して位置を徐々に移動。目標位置に近づいたらループを終了し、最後に位置を固定。
     public IEnumerator SmoothMove(Transform movingPiece, Vector3 startPosition, Vector3 targetPosition, System.Action onComplete)
     {
@@ -61,28 +62,6 @@ public class PieceController : MonoBehaviour
         StartCoroutine(SmoothMove(targetPiece, targetPiece.position, originalPos, null));
     }
 
-    void Swap(Vector2 direction)
-    {
-        // 入れ替え処理
-        Vector2 targetPos = (Vector2)transform.position + direction;
-        Collider2D targetPiece = Physics2D.OverlapPoint(targetPos);
-
-        // ↓ この判定が必要か検討。操作感が悪くなりそう。
-        /*
-        if (Mathf.Abs(targetPos.x - originalPos.x) > 1 || Mathf.Abs(targetPos.y - originalPos.y) > 1)
-        {
-            return; // 隣接していない場合は何もしない
-        }
-        */
-
-        if (targetPiece)
-        {
-            // ピースを入れ替える
-            //Debug.Log("Swap: (" + transform.position.x + "," + transform.position.y + ") <=> (" + targetPiece.transform.position.x + "," + targetPiece.transform.position.y);
-            SwapPosition(targetPiece.transform);
-        }
-    }
-
     private void OnMouseEnter() // マウスがピースの上に乗った時
     {
         spriteRenderer.color = originalColor * 1.5f; // 明るくする
@@ -127,4 +106,5 @@ public class PieceController : MonoBehaviour
     {
 
     }
+#endif
 }

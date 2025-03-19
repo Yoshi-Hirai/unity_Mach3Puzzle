@@ -4,11 +4,22 @@ using System.Collections;
 
 public class PieceView : MonoBehaviour
 {
-    private SpriteRenderer spriteRenderer;
-    private Color originalColor;
-    private bool isMoving = false;
-    private float moveSpeed = 5f;
+	public enum FadeState
+	{
+		None,       // ãƒ•ã‚§ãƒ¼ãƒ‰ãªã—
+		FadingIn,   // ãƒ•ã‚§ãƒ¼ãƒ‰ã‚¤ãƒ³ä¸­
+		FadingOut   // ãƒ•ã‚§ãƒ¼ãƒ‰ã‚¢ã‚¦ãƒˆä¸­
+	}
+	private Vector3 targetPosition;
+	private int targetAlpha;
+	private SpriteRenderer spriteRenderer;
+	private Color originalColor;
+	private bool isMoving = false;
+	private FadeState fadeState = FadeState.None;
+	private float moveSpeed = 5f;
+	private float fadeSpeed = 2.0f;
 
+#if false
     public IEnumerator MoveToWithCallback(Vector3 targetPosition, Action callback = null)
     {
         while (Vector3.Distance(transform.position, targetPosition) > 0.01f)
@@ -17,7 +28,7 @@ public class PieceView : MonoBehaviour
             yield return null;
         }
         transform.position = targetPosition;
-        callback?.Invoke(); // ƒR[ƒ‹ƒoƒbƒNÀs
+        callback?.Invoke(); // ï¿½Rï¿½[ï¿½ï¿½ï¿½oï¿½bï¿½Nï¿½ï¿½ï¿½s
     }
 
     public void PlayDestroyAnimation(Action onComplete)
@@ -40,7 +51,7 @@ public class PieceView : MonoBehaviour
         }
 
         spriteRenderer.color = new Color(originalColor.r, originalColor.g, originalColor.b, 0);
-        onComplete?.Invoke(); // Š®‘S‚ÉÁ‚¦‚½‚çƒR[ƒ‹ƒoƒbƒNÀs
+        onComplete?.Invoke(); // ï¿½ï¿½ï¿½Sï¿½Éï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Rï¿½[ï¿½ï¿½ï¿½oï¿½bï¿½Nï¿½ï¿½ï¿½s
     }
 
     void Start()
@@ -78,4 +89,58 @@ public class PieceView : MonoBehaviour
     {
         spriteRenderer.color = originalColor;
     }
+#endif
+
+	public bool IsMoving()
+	{
+		return isMoving;
+	}
+	public void MoveTo(Vector3 newPosition)
+	{
+		targetPosition = newPosition;
+		isMoving = true;
+	}
+
+	public bool IsFading()
+	{
+		return fadeState == FadeState.None ? false : true;
+	}
+	public void SetFading(FadeState state)
+	{
+		fadeState = state;
+	}
+
+	//--------  Lifecycle Methods   --------
+	void LateUpdate()
+	{
+		if (isMoving)
+		{
+			transform.position = Vector3.Lerp(transform.position, targetPosition, moveSpeed * Time.deltaTime);
+			if (Vector3.Distance(transform.position, targetPosition) < 0.01f)
+			{
+				transform.position = targetPosition;
+				isMoving = false;
+			}
+		}
+		{
+			SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
+			switch (fadeState)
+			{
+				case FadeState.FadingIn:
+					//FadeIn();
+					break;
+				case FadeState.FadingOut:
+					Color color = spriteRenderer.color;
+					color.a -= fadeSpeed * Time.deltaTime;
+					color.a = Mathf.Clamp01(color.a);
+					spriteRenderer.color = color;
+
+					if (color.a <= 0) // å®Œå…¨ã«é€æ˜ã«ãªã£ãŸã‚‰å‡¦ç†ã‚’åœæ­¢
+					{
+						SetFading(FadeState.None);
+					}
+					break;
+			}
+		}
+	}
 }

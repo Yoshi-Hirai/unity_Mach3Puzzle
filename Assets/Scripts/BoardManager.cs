@@ -8,210 +8,230 @@ using System.Collections.Generic;
 
 public class BoardManager : MonoBehaviour
 {
+	//	定数・静的フィールド
 	public enum GameState
 	{
-		WaitingForInput,    // ユーザー入力待ち
-		SwapAnimating,      // ピースの入れ替えアニメーション
-		Matching,           // マッチング判定
+		WaitingForInput,    //	ユーザー入力待ち
+		SwapAnimating,      //	ピースの入れ替えアニメーション
+		Matching,           //	マッチング判定
 		DeleteFading,       //	消失時のフェーディングアニメーション
-		Falling,            // ピースの落下処理
-		FallingAnimating,
-		Createing,
-		CreatingAnimating,
-		ResolvingChain,     // 連鎖の処理
+		Falling,            //	ピースの落下処理
+		FallingAnimating,   //	ピースの落下アニメーション
+		Createing,          //	ピースの追加
+		CreatingAnimating,  //	ピースの追加アニメーション
+		ResolvingChain,     //	連鎖の処理 -> Matching に遷移させて連鎖処理を行わせることができているため不要。
 	}
-	private GameState currentState = GameState.WaitingForInput; // 初期状態
-	private void changeGameState(GameState state)
+	private const int NotSelected = -1;                     //	ピースが選択されていない
+	private const int MatchThreshold = 3;                   //	マッチと判断されるピース数閾値
+
+	//	インスペクタで設定する変数
+	[SerializeField] private int Width;                     //	盤面の幅
+	[SerializeField] private int Height;                    //	盤面の高さ
+	[SerializeField] private Tile[] GroundPatterns;         //	背景タイルテクスチャパターン
+	[SerializeField] private GameObject[] PiecesPatterns;   //	ピースパターン(prefab)
+
+	private GameState _currentState = GameState.WaitingForInput;
+	private GameObject[,] _cell;        //	ピースデータの管理
+	private Tilemap _tileMap;           //	背景タイルデータの管理(子Object:Tilemap)
+	private Grid _grid;                 //	子Object:Grid
+
+	private GameObject _selectedPiece;          //	操作で選択されたピース
+	private Vector2Int[] _swapIndex;            //	ピースを交換するインデックス(cellの位置。[NotSelected, NotSelected]で未設定)
+	private List<GameObject> _matchedPieces;    //	マッチしたピース(GameObject)のリスト
+
+	//	落下するピース情報のリスト
+	private List<(GameObject piece, Vector2Int from, Vector2Int to)> _fallingPieces = new List<(GameObject, Vector2Int, Vector2Int)>();
+
+	//--------	Lifecycle Methods	--------
+	//	オブジェクト生成時
+	private void Awake()
 	{
-		currentState = state;
-	}
-
-	public int Width;
-	public int Height;
-	public Tile[] GrounPatterns;            // 背景タイルテクスチャパターン
-	public GameObject[] PiecesPatterns;     // ピースパターン(prefab)
-
-	private GameObject[,] m_Cell;           // セル(ピース)データの管理
-	private Tilemap m_Tilemap;
-	private Grid m_Grid;
-
-	private Vector2 startPos;
-	private Vector2 endPos;
-	private GameObject selectedPiece;
-
-	private Vector2Int[] m_SwapIndex;           //	ピースを交換するインデックス(m_cellの位置。[-1, -1]で未設定)
-	private List<GameObject> m_MatchedPieces;   //	マッチしたピース(GameObject)のリスト	
-	private List<(GameObject piece, Vector2Int from, Vector2Int to)> fallingPieces = new List<(GameObject, Vector2Int, Vector2Int)>();
-	private List<(GameObject piece, Vector2Int from, Vector2Int to)> createPieces = new List<(GameObject, Vector2Int, Vector2Int)>();
-	private List<(GameObject piece, Vector2Int from, Vector2Int to)> movingPieces = new List<(GameObject, Vector2Int, Vector2Int)>();
-
-	private void SetSwapIndex(Vector2Int index0, Vector2Int index1)
-	{
-		m_SwapIndex[0] = index0;
-		m_SwapIndex[1] = index1;
-	}
-	private void ClearSwapIndex()
-	{
-		SetSwapIndex(new Vector2Int(-1, -1), new Vector2Int(-1, -1));
 	}
 
-	// transform.position <=> m_cellインデックス変換
-	public Vector2Int ConvertFromTransformToCell(Vector3 transformposition)
+	//	Start is called once before the first execution of Update after the MonoBehaviour is created(最初のフレームの前)
+	//	・グリッド (_cell) の初期化
+	//	・背景 (Tilemap) の生成
+	//	・ピース (CreatePieceToGrid()) の配置
+	private void Start()
 	{
-		Vector3Int cellPosition = m_Grid.WorldToCell(transformposition);
-		return new Vector2Int(cellPosition.x, cellPosition.y);
-	}
-	public Vector3 ConvertFromCellToTransform(Vector2Int cellindex)
-	{
-		return m_Grid.GetCellCenterWorld(new Vector3Int(cellindex.x, cellindex.y, 0));
-	}
+		_tileMap = GetComponentInChildren<Tilemap>();
+		_grid = GetComponentInChildren<Grid>();
+		_cell = new GameObject[Width, Height];
+		_swapIndex = new Vector2Int[2];
+		ClearSwapIndex();
 
-	private void AddPieceToGrid(int x, int y)
-	{
-		int pieceIndex = UnityEngine.Random.Range(0, PiecesPatterns.Length);
-		GameObject cell = Instantiate(PiecesPatterns[pieceIndex], m_Grid.GetCellCenterWorld(new Vector3Int(x, y, 0)), Quaternion.identity);
-		cell.AddComponent<PieceView>(); // PieceView を自動でアタッチ
-		m_Cell[x, y] = cell;
-	}
-
-	// 横・縦方向にピースをチェック
-	public List<GameObject> PieceMatchCheck()
-	{
-		HashSet<GameObject> matchedPieces = new HashSet<GameObject>(); // 重複を防ぐため HashSet を使用
-
-		// 横方向のチェック
-		for (int y = 0; y < Height; y++)
+		for (int y = 0; y < Height; ++y)
 		{
-			int matchCount = 1; // 連続しているピースの数
-			List<GameObject> tempMatches = new List<GameObject>();
-			tempMatches.Add(m_Cell[0, y]);
-
-			for (int x = 1; x < Width; x++)
+			for (int x = 0; x < Width; ++x)
 			{
-				if (m_Cell[x, y] != null && m_Cell[x - 1, y] != null &&
-					m_Cell[x, y].tag == m_Cell[x - 1, y].tag)
-				{
-					matchCount++;
-					tempMatches.Add(m_Cell[x, y]);
-				}
-				else
-				{
-					if (matchCount >= 3) // 3つ以上並んでいたら追加
-					{
-						foreach (var piece in tempMatches)
-							matchedPieces.Add(piece);
-					}
-					matchCount = 1;
-					tempMatches.Clear();
-					tempMatches.Add(m_Cell[x, y]);
-				}
-			}
+				//　背景タイルを生成
+				int groundIndex = UnityEngine.Random.Range(0, GroundPatterns.Length);
+				_tileMap.SetTile(new Vector3Int(x, y, 0), GroundPatterns[groundIndex]);
 
-			if (matchCount >= 3) // ループ終了時もチェック
-			{
-				foreach (var piece in tempMatches)
-					matchedPieces.Add(piece);
+				// ピースを生成し登録
+				CreatePieceToGrid(x, y);
 			}
 		}
-
-		// 縦方向のチェック
-		for (int x = 0; x < Width; x++)
-		{
-			int matchCount = 1;
-			List<GameObject> tempMatches = new List<GameObject>();
-			tempMatches.Add(m_Cell[x, 0]);
-
-			for (int y = 1; y < Height; y++)
-			{
-				if (m_Cell[x, y] != null && m_Cell[x, y - 1] != null &&
-					m_Cell[x, y].tag == m_Cell[x, y - 1].tag)
-				{
-					matchCount++;
-					tempMatches.Add(m_Cell[x, y]);
-				}
-				else
-				{
-					if (matchCount >= 3)
-					{
-						foreach (var piece in tempMatches)
-							matchedPieces.Add(piece);
-					}
-					matchCount = 1;
-					tempMatches.Clear();
-					tempMatches.Add(m_Cell[x, y]);
-				}
-			}
-
-			if (matchCount >= 3)
-			{
-				foreach (var piece in tempMatches)
-					matchedPieces.Add(piece);
-			}
-		}
-
-		return new List<GameObject>(matchedPieces);
 	}
 
+	// Update is called once per frame(毎フレーム)
+	private void Update()
+	{
+		GameState tempState = _currentState;
+		switch (_currentState)
+		{
+			case GameState.WaitingForInput:
+				HandleWaitingForInput();
+				break;
+			case GameState.SwapAnimating:
+				if (AreAllPiecesSettled())
+				{
+					SwapPieceInternal();
+					ChangeGameState(GameState.Matching);
+				}
+				break;
+			case GameState.Matching:
+				HandleMatching();
+				break;
+			case GameState.DeleteFading:
+				if (AreAllPiecesFadesCompleted())
+				{
+					DeletePieceInternal();
+					ChangeGameState(GameState.Falling);
+				}
+				break;
+			case GameState.Falling:
+				HandleFalling();
+				ChangeGameState(GameState.FallingAnimating);
+				break;
+			case GameState.FallingAnimating:
+				if (AreAllPiecesSettled())
+				{
+					FallingPieceInternal();
+					ChangeGameState(GameState.Createing);
+				}
+				break;
+			case GameState.Createing:
+				HandleCreating();
+				ChangeGameState(GameState.CreatingAnimating);
+				break;
 
-	private void pieceDeleteInternal()
-	{
-		foreach (var piece in m_MatchedPieces)
-		{
-			Vector2Int cellPos = ConvertFromTransformToCell(piece.transform.position);
-			m_Cell[cellPos.x, cellPos.y] = null; // データを削除
-			Destroy(piece);
+			case GameState.CreatingAnimating:
+				if (AreAllPiecesSettled())
+				{
+					ChangeGameState(GameState.Matching);
+					/*
+										for (int y = 0; y < Height; ++y)
+										{
+											for (int x = 0; x < Width; ++x)
+											{
+												if (_cell[x, y] == null)
+												{
+													Debug.Log("NULL :(" + x + "," + y + ")");
+												}
+											}
+										}
+					*/
+				}
+				break;
+			case GameState.ResolvingChain:
+				break;
 		}
-		m_MatchedPieces.Clear();
-	}
-	public void PieceMatchCheckUpdate()
-	{
-		m_MatchedPieces = PieceMatchCheck();
-		Debug.Log("MatchPiece Count: " + m_MatchedPieces.Count);
-		if (m_MatchedPieces.Count != 0)
+
+		if (_currentState != tempState)
 		{
-			// マッチしたピースを削除し、m_Cellを更新
-			foreach (var piece in m_MatchedPieces)
+			Debug.Log("Change State: " + tempState + "=>" + _currentState);
+		}
+	}
+
+	//	物理計算
+	private void FixedUpdate()
+	{
+	}
+
+	//	`Update()` の後
+	private void LateUpdate()
+	{
+		switch (_currentState)
+		{
+			case GameState.WaitingForInput:
+			case GameState.SwapAnimating:
+			case GameState.Matching:
+			case GameState.DeleteFading:
+			case GameState.Falling:
+			case GameState.FallingAnimating:
+			case GameState.Createing:
+			case GameState.CreatingAnimating:
+			case GameState.ResolvingChain:
+				break;
+		}
+	}
+
+	//--------	Event Methods	--------
+
+	//--------	Public Methods	--------
+
+	//--------	private Methods	--------
+	//	ゲームステート(_currentState)関連
+	private void ChangeGameState(GameState state)
+	{
+		_currentState = state;
+	}
+
+	//	各ゲームステートのHandle
+	private void HandleWaitingForInput()
+	{
+		//  タッチ(タップ) or クリックを検出
+		//  ?? false → タッチデバイスが存在しない場合は false にする
+		bool isTouchStart = Touchscreen.current?.primaryTouch.press.wasPressedThisFrame ?? false;
+		bool isTouchEnd = Touchscreen.current?.primaryTouch.press.wasReleasedThisFrame ?? false;
+		bool isClickStart = Mouse.current?.leftButton.wasPressedThisFrame ?? false;
+		bool isClickEnd = Mouse.current?.leftButton.wasReleasedThisFrame ?? false;
+
+		if (isTouchStart || isClickStart || isTouchEnd || isClickEnd)
+		{
+			ExecutePieceSelection();
+		}
+	}
+
+	private void HandleMatching()
+	{
+		_matchedPieces = CheckPieceMatch();
+		Debug.Log("MatchPiece Count: " + _matchedPieces.Count);
+		if (_matchedPieces.Count != 0)
+		{
+			// マッチしたピースに削除アニメーションを指示。アニメーション終了後、削除し_cellを更新
+			foreach (var piece in _matchedPieces)
 			{
 				// ピースのフェードアウト開始
 				piece.GetComponent<PieceView>().SetFading(PieceView.FadeState.FadingOut);
 			}
-			changeGameState(GameState.DeleteFading);
+			ChangeGameState(GameState.DeleteFading);
 		}
 		else
 		{
-			changeGameState(GameState.WaitingForInput);
+			ChangeGameState(GameState.WaitingForInput);
 		}
 	}
 
-	private void pieceFallingInternal()
+	private void HandleFalling()
 	{
-		foreach (var (piece, from, to) in fallingPieces)
-		{
-			m_Cell[to.x, to.y] = m_Cell[from.x, from.y];
-			m_Cell[from.x, from.y] = null;
-		}
-		fallingPieces.Clear();
-	}
-
-	private void HandleFallingPieces()
-	{
-		fallingPieces.Clear();
-		createPieces.Clear();
+		_fallingPieces.Clear();
 
 		for (int x = 0; x < Width; x++)
 		{
 			for (int y = 0; y < Height; y++) // 下から順に処理する
 			{
-				// 空のセルがある or すでに落下したセル の場合
-				if ((m_Cell[x, y] == null) || fallingPieces.Any(fp => fp.from == new Vector2Int(x, y)))
+				//	空のセルがある or すでに落下したセル の場合 => ここに移動(=落下)させるピースを探す
+				if ((_cell[x, y] == null) || _fallingPieces.Any(fp => fp.from == new Vector2Int(x, y)))
 				{
 					int fallDistance = 0; // 落下距離
-					int aboveY;
+					int aboveY = -1;
 
-					// 上から最も遠いピースを探す
+					//	最も遠いピースを探す
 					for (aboveY = y + 1; aboveY < Height; aboveY++)
 					{
-						if ((m_Cell[x, aboveY] != null) && (!fallingPieces.Any(fp => fp.from == new Vector2Int(x, aboveY))))
+						if ((_cell[x, aboveY] != null) && (!_fallingPieces.Any(fp => fp.from == new Vector2Int(x, aboveY))))
 						{
 							fallDistance = aboveY - y; // 落下距離を計算
 							break;
@@ -223,237 +243,106 @@ public class BoardManager : MonoBehaviour
 					{
 						// ピースの移動
 						//Debug.Log("Fall x" + x + " y " + aboveY + "=" + y);
-						m_Cell[x, aboveY].GetComponent<PieceView>().MoveTo(ConvertFromCellToTransform(new Vector2Int(x, y)));
-						fallingPieces.Add((m_Cell[x, aboveY], new Vector2Int(x, aboveY), new Vector2Int(x, y)));
+						_cell[x, aboveY].GetComponent<PieceView>().MoveTo(ConvertFromCellToTransform(new Vector2Int(x, y)));
+						_fallingPieces.Add((_cell[x, aboveY], new Vector2Int(x, aboveY), new Vector2Int(x, y)));
 					}
 				}
 			}
 		}
-		/*
-				for (int x = 0; x < Width; x++)
-				{
-					for (int y = 0; y < Height; y++)
-					{
-						if (m_Cell[x, y] == null) // 空のセルがある場合
-						{
-							for (int aboveY = y + 1; aboveY < Height; aboveY++)
-							{
-								if (m_Cell[x, aboveY] != null)
-								{
-									// ピースの移動開始
-									m_Cell[x, aboveY].GetComponent<PieceView>().MoveTo(ConvertFromCellToTransform(new Vector2Int(x, y)));
-									//	fallingPieces.Add((m_Cell[x, aboveY], new Vector2Int(x, aboveY), new Vector2Int(x, y)));
-									//							piece.GetComponent<PieceView>().MoveTo(otherPiece.transform.position);
-									//							otherPiece.GetComponent<PieceView>().MoveTo(piece.transform.position);
-									//							m_Cell[x, y] = m_Cell[x, aboveY];
-									//							m_Cell[x, aboveY] = null;
-									break;
-								}
-							}
-						}
-					}
-				}
-		*/
-
-		changeGameState(GameState.FallingAnimating);
-		/*
-					// 新しいピースを補充
-					int numAddPiece = 0;
-					for (int y = 0; y < Height; y++)
-					{
-						if (m_Cell[x, y] == null)
-						{
-							AddPieceToGrid(x, y);
-							createPieces.Add((m_Cell[x, y], new Vector2Int(x, Height + numAddPiece), new Vector2Int(x, y)));
-							m_Cell[x, y].GetComponent<Renderer>().enabled = false;
-							numAddPiece++;
-						}
-					}
-				}
-
-				// すべての落下処理をアニメーションで実行
-				yield return StartCoroutine(AnimateFallingPieces());
-				Debug.Log("update cell function end.");
-		*/
 	}
 
-	private void HandleCreatingPieces()
+	private void HandleCreating()
 	{
-		createPieces.Clear();
-
 		// 新しいピースを補充
 		for (int x = 0; x < Width; x++)
 		{
-			int numAddPiece = 0;
+			int numAddPiece = 0;    //	生成ピースを不可視化していないのでもし見えるようであれば、この変数をインクリメントしてより遠くから始動させる
 			for (int y = 0; y < Height; y++)
 			{
-				if (m_Cell[x, y] == null)
+				if (_cell[x, y] == null)
 				{
 					// 生成時は、描画を待たずにこの段階でm_CellにGameObjectを生成する
-					AddPieceToGrid(x, y);
-					createPieces.Add((m_Cell[x, y], new Vector2Int(x, Height + numAddPiece), new Vector2Int(x, y)));
-					m_Cell[x, y].GetComponent<PieceView>().transform.position = ConvertFromCellToTransform(new Vector2Int(x, Height + numAddPiece));
-					m_Cell[x, y].GetComponent<PieceView>().MoveTo(ConvertFromCellToTransform(new Vector2Int(x, y)));
-					//	m_Cell[x, y].GetComponent<Renderer>().enabled = false;
+					CreatePieceToGrid(x, y);
+					_cell[x, y].GetComponent<PieceView>().transform.position = ConvertFromCellToTransform(new Vector2Int(x, Height + numAddPiece));
+					_cell[x, y].GetComponent<PieceView>().MoveTo(ConvertFromCellToTransform(new Vector2Int(x, y)));
+					//	_cell[x, y].GetComponent<Renderer>().enabled = false;
 					numAddPiece++;
 				}
 			}
 		}
-		changeGameState(GameState.CreatingAnimating);
 	}
 
-#if false
-    public IEnumerator PieceMatchCheckUpdate()
-    {
-        List<GameObject> matchedPieces;
-        do
-        {
-            matchedPieces = PieceMatchCheck();
-            Debug.Log("MatchPiece Start: " + matchedPieces.Count);
-
-            // マッチしたピースを削除し、m_Cellを更新
-            foreach (var piece in matchedPieces)
-            {
-                Vector2Int cellPos = ConvertFromTransformToCell(piece.transform.position);
-                m_Cell[cellPos.x, cellPos.y] = null; // データを削除
-
-                // ピースのアニメーションを開始
-                piece.GetComponent<PieceView>().PlayDestroyAnimation(() =>
-                {
-                    Destroy(piece);
-                });
-            }
-
-            // 落下処理を待つ
-            yield return StartCoroutine(updateCell());
-
-        } while (matchedPieces.Count > 0);
-
-        Debug.Log("PieceMatchCheckUpdate() END");
-    }
-
-    private IEnumerator updateCell()
-    {
-        fallingPieces.Clear();
-        createPieces.Clear();
-
-        for (int x = 0; x < Width; x++)
-        {
-            for (int y = 0; y < Height; y++)
-            {
-                if (m_Cell[x, y] == null) // 空のセルがある場合
-                {
-                    for (int aboveY = y + 1; aboveY < Height; aboveY++)
-                    {
-                        if (m_Cell[x, aboveY] != null)
-                        {
-                            fallingPieces.Add((m_Cell[x, aboveY], new Vector2Int(x, aboveY), new Vector2Int(x, y)));
-                            m_Cell[x, y] = m_Cell[x, aboveY];
-                            m_Cell[x, aboveY] = null;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // 新しいピースを補充
-            int numAddPiece = 0;
-            for (int y = 0; y < Height; y++)
-            {
-                if (m_Cell[x, y] == null)
-                {
-                    AddPieceToGrid(x, y);
-                    createPieces.Add((m_Cell[x, y], new Vector2Int(x, Height + numAddPiece), new Vector2Int(x, y)));
-                    m_Cell[x, y].GetComponent<Renderer>().enabled = false;
-                    numAddPiece++;
-                }
-            }
-        }
-
-        // すべての落下処理をアニメーションで実行
-        yield return StartCoroutine(AnimateFallingPieces());
-        Debug.Log("update cell function end.");
-    }
-
-    private IEnumerator AnimateFallingPieces()
-    {
-        List<Coroutine> fallCoroutines = new List<Coroutine>();
-
-        foreach (var (piece, from, to) in fallingPieces)
-        {
-            // ピースの移動アニメーションを開始
-            Coroutine fallCoroutine = StartCoroutine(piece.GetComponent<PieceView>().MoveToWithCallback(ConvertFromCellToTransform(to)));
-            fallCoroutines.Add(fallCoroutine);
-        }
-
-        // すべての落下アニメーションが終わるのを待つ
-        foreach (var coroutine in fallCoroutines)
-        {
-            yield return coroutine;
-        }
-
-        Debug.Log("AnimateFallingPieces 完了！");
-    }
-
-    private IEnumerator AnimateMovingPieces()
-    {
-        List<Coroutine> moveCoroutines = new List<Coroutine>();
-
-        foreach (var (piece, from, to) in movingPieces)
-        {
-            // ピースの移動アニメーションを開始
-            Coroutine moveCoroutine = StartCoroutine(piece.GetComponent<PieceView>().MoveToWithCallback(ConvertFromCellToTransform(to)));
-            moveCoroutines.Add(moveCoroutine);
-        }
-
-        // すべての落下アニメーションが終わるのを待つ
-        foreach (var coroutine in moveCoroutines)
-        {
-            yield return coroutine;
-        }
-
-        Debug.Log("AnimateMovingPieces 完了！");
-    }
-#endif
-
-	//  ------------    (リファクタ済)  ------------
-	//	全ピースの移動確認チェック
-	private bool AreAllPiecesSettled()
+	//	ピースを交換するインデックス(_swapIndex)関連
+	private void SetSwapIndex(Vector2Int index0, Vector2Int index1)
 	{
-		foreach (GameObject piece in m_Cell)
+		_swapIndex[0] = index0;
+		_swapIndex[1] = index1;
+	}
+	private void ClearSwapIndex()
+	{
+		SetSwapIndex(new Vector2Int(NotSelected, NotSelected), new Vector2Int(NotSelected, NotSelected));
+	}
+
+	// transform.position <=> m_cellインデックス変換
+	private Vector2Int ConvertFromTransformToCell(Vector3 transformPosition)
+	{
+		Vector3Int cellPosition = _grid.WorldToCell(transformPosition);
+		return new Vector2Int(cellPosition.x, cellPosition.y);
+	}
+	private Vector3 ConvertFromCellToTransform(Vector2Int cellIndex)
+	{
+		return _grid.GetCellCenterWorld(new Vector3Int(cellIndex.x, cellIndex.y, 0));
+	}
+
+	//	ピース処理関連
+	//	ピースを指定位置に生成し、ピースデータを管理する_cellへ代入する
+	private void CreatePieceToGrid(int x, int y)
+	{
+		int pieceIndex = UnityEngine.Random.Range(0, PiecesPatterns.Length);
+		GameObject cell = Instantiate(PiecesPatterns[pieceIndex], _grid.GetCellCenterWorld(new Vector3Int(x, y, 0)), Quaternion.identity);
+		cell.AddComponent<PieceView>(); // PieceView を自動でアタッチ
+		_cell[x, y] = cell;
+	}
+
+	//	ピース選択時の処理
+	private void ExecutePieceSelection()
+	{
+		//	入力位置の取得 -> スクリーン座標をワールド座標に変換
+		Vector2 inputPos = Touchscreen.current?.primaryTouch.position.ReadValue() ?? Mouse.current.position.ReadValue();
+		Vector3 worldPos = Camera.main.ScreenToWorldPoint(inputPos);
+
+		if (_selectedPiece == null)
 		{
-			if (piece != null && piece.GetComponent<PieceView>().IsMoving())
+			//	1つ目のピース選択
+			//	2D用の Raycast を使用(「指定した座標にオブジェクトがあるか」調べる)
+			//	Physics2D.Raycast(Vector2 origin, Vector2 direction, float distance, int layerMask);
+			//	origin		Ray の開始位置（ワールド座標）
+			//	direction	Ray の飛ぶ方向（通常は Vector2.zero で「その点」をチェック）
+			//	distance	Ray の距離（通常は Mathf.Infinity）
+			//	layerMask	当たり判定のレイヤー（~0 なら全レイヤー）
+			RaycastHit2D hit = Physics2D.Raycast(worldPos, Vector2.zero);
+			if (hit.collider != null)
 			{
-				return false;
+				_selectedPiece = hit.collider.gameObject;
+				//Debug.Log($"選択されたピース: {_selectedPiece.name}");
 			}
 		}
-		return true;
-	}
-
-	//	全ピースのフェード確認チェック
-	private bool AreAllPiecesFadesCompleted()
-	{
-		foreach (GameObject piece in m_Cell)
+		else
 		{
-			if (piece != null && piece.GetComponent<PieceView>().IsFading())
-			{
-				return false;
-			}
+			//	2つ目のピース(入れ替え先)を選択
+			Vector2 selectedPiece2D = new Vector2(_selectedPiece.transform.position.x, _selectedPiece.transform.position.y);
+			Vector2 worldPos2D = new Vector2(worldPos.x, worldPos.y);
+			Vector2 swipeDirection = worldPos2D - selectedPiece2D;
+			Debug.Log($"スワップ方向: {swipeDirection}");
+			ExecutePieceSwap(_selectedPiece, swipeDirection);
+			_selectedPiece = null; // 選択解除
+
+			ChangeGameState(GameState.SwapAnimating);
 		}
-		return true;
 	}
 
-	//	ピース交換で発生する内部情報を更新する
-	private void SwapPiecesInternal()
-	{
-		GameObject temp = m_Cell[m_SwapIndex[0].x, m_SwapIndex[0].y];
-		m_Cell[m_SwapIndex[0].x, m_SwapIndex[0].y] = m_Cell[m_SwapIndex[1].x, m_SwapIndex[1].y];
-		m_Cell[m_SwapIndex[1].x, m_SwapIndex[1].y] = temp;
-		ClearSwapIndex();
-	}
-
-	//  タップ / クリックしたピースを取得
-	private void SwapPieces(GameObject piece, Vector2 swipeDirection)
+	//  ピース交換処理
+	private void ExecutePieceSwap(GameObject piece, Vector2 swipeDirection)
 	{
 		float swipeThreshold = 0.5f;
 		Vector2Int direction = Vector2Int.zero;
@@ -470,7 +359,7 @@ public class BoardManager : MonoBehaviour
 			if (hit.collider != null)
 			{
 				GameObject otherPiece = hit.collider.gameObject;    //  入れ替え先のピースオブジェクト
-																	//  m_cellのインデックスを算出 -> 内部データ(m_Cell)更新用に保持
+																	//  m_cellのインデックスを算出 -> 内部データ(_cell)更新用に保持
 				SetSwapIndex(ConvertFromTransformToCell(piece.transform.position), ConvertFromTransformToCell(otherPiece.transform.position));
 
 				// ピースの移動開始
@@ -480,201 +369,149 @@ public class BoardManager : MonoBehaviour
 		}
 	}
 
-	private void HandlePieceSelection()
+	// 横・縦方向にピースをチェック
+	private List<GameObject> CheckPieceMatch()
 	{
-		// 入力位置の取得 -> スクリーン座標をワールド座標に変換
-		Vector2 inputPos = Touchscreen.current?.primaryTouch.position.ReadValue() ?? Mouse.current.position.ReadValue();
-		Vector3 worldPos = Camera.main.ScreenToWorldPoint(inputPos);
+		HashSet<GameObject> matchedPieces = new HashSet<GameObject>(); // 重複を防ぐため HashSet を使用
 
-		if (selectedPiece == null)
+		// 横方向のチェック
+		for (int y = 0; y < Height; y++)
 		{
-			// 1つ目のピース選択
+			int matchCount = 1; // 連続しているピースの数
+			List<GameObject> tempMatches = new List<GameObject>();
+			tempMatches.Add(_cell[0, y]);
 
-			//  2D用の Raycast を使用(「指定した座標にオブジェクトがあるか」調べる)
-			//  Physics2D.Raycast(Vector2 origin, Vector2 direction, float distance, int layerMask);
-			//  origin	Ray の開始位置（ワールド座標）
-			//  direction	Ray の飛ぶ方向（通常は Vector2.zero で「その点」をチェック）
-			//  distance	Ray の距離（通常は Mathf.Infinity）
-			//  layerMask	当たり判定のレイヤー（~0 なら全レイヤー）
-			RaycastHit2D hit = Physics2D.Raycast(worldPos, Vector2.zero);
-			if (hit.collider != null)
+			for (int x = 1; x < Width; x++)
 			{
-				selectedPiece = hit.collider.gameObject;
-				Debug.Log($"選択されたピース: {selectedPiece.name}");
-			}
-		}
-		else
-		{
-			// 2つ目のピース(入れ替え先)を選択
-			Vector2 selectedPiece2D = new Vector2(selectedPiece.transform.position.x, selectedPiece.transform.position.y);
-			Vector2 worldPos2D = new Vector2(worldPos.x, worldPos.y);
-			Vector2 swipeDirection = worldPos2D - selectedPiece2D;
-			Debug.Log($"スワップ方向: {swipeDirection}");
-			SwapPieces(selectedPiece, swipeDirection);
-			selectedPiece = null; // 選択解除
-
-			changeGameState(GameState.SwapAnimating);
-		}
-	}
-
-	private void CheckUserInput()
-	{
-		//  タッチ(タップ) or クリックを検出
-		//  ?? false → タッチデバイスが存在しない場合は false にする
-		bool isTouchStart = Touchscreen.current?.primaryTouch.press.wasPressedThisFrame ?? false;
-		bool isTouchEnd = Touchscreen.current?.primaryTouch.press.wasReleasedThisFrame ?? false;
-		bool isClickStart = Mouse.current?.leftButton.wasPressedThisFrame ?? false;
-		bool isClickEnd = Mouse.current?.leftButton.wasReleasedThisFrame ?? false;
-
-		if (isTouchStart || isClickStart || isTouchEnd || isClickEnd)
-		{
-			HandlePieceSelection();
-		}
-	}
-
-	//--------  Lifecycle Methods   --------
-	// Start is called once before the first execution of Update after the MonoBehaviour is created
-	// グリッド (m_Cell) の初期化
-	// 背景 (Tilemap) の生成
-	// ピース (AddPieceToGrid()) の配置
-	void Start()
-	{
-		m_Tilemap = GetComponentInChildren<Tilemap>();
-		m_Grid = GetComponentInChildren<Grid>();
-		m_Cell = new GameObject[Width, Height];
-		m_SwapIndex = new Vector2Int[2];
-
-		for (int y = 0; y < Height; ++y)
-		{
-			for (int x = 0; x < Width; ++x)
-			{
-				//　背景タイルを生成
-				int groundIndex = UnityEngine.Random.Range(0, GrounPatterns.Length);
-				m_Tilemap.SetTile(new Vector3Int(x, y, 0), GrounPatterns[groundIndex]);
-
-				// ピースを生成し登録
-				AddPieceToGrid(x, y);
-			}
-		}
-	}
-
-	// Update is called once per frame
-	void Update()
-	{
-		GameState tempState = currentState;
-		switch (currentState)
-		{
-			case GameState.WaitingForInput:
-				CheckUserInput();
-				break;
-
-			case GameState.SwapAnimating:
-				if (AreAllPiecesSettled())
+				if (_cell[x, y] != null && _cell[x - 1, y] != null &&
+					_cell[x, y].tag == _cell[x - 1, y].tag)
 				{
-					SwapPiecesInternal();
-					changeGameState(GameState.Matching);
+					matchCount++;
+					tempMatches.Add(_cell[x, y]);
 				}
-				break;
-
-			case GameState.Matching:
-				PieceMatchCheckUpdate();
-				break;
-			case GameState.DeleteFading:
-				if (AreAllPiecesFadesCompleted())
+				else
 				{
-					pieceDeleteInternal();
-					changeGameState(GameState.Falling);
-				}
-				break;
-
-			case GameState.Falling:
-				HandleFallingPieces();
-				break;
-			case GameState.FallingAnimating:
-				if (AreAllPiecesSettled())
-				{
-					pieceFallingInternal();
-					changeGameState(GameState.Createing);
-
-					/*
-									for (int y = 0; y < Height; ++y)
-									{
-										for (int x = 0; x < Width; ++x)
-										{
-											if (m_Cell[x, y] == null)
-											{
-												Debug.Log("NULL :(" + x + "," + y + ")");
-											}
-										}
-									}
-					*/
-				}
-				break;
-
-			case GameState.Createing:
-				HandleCreatingPieces();
-				break;
-
-			case GameState.CreatingAnimating:
-				if (AreAllPiecesSettled())
-				{
-					changeGameState(GameState.Matching);
-					for (int y = 0; y < Height; ++y)
+					if (matchCount >= MatchThreshold)   // MatchThreshold以上並んでいたら追加
 					{
-						for (int x = 0; x < Width; ++x)
-						{
-							if (m_Cell[x, y] == null)
-							{
-								Debug.Log("NULL :(" + x + "," + y + ")");
-							}
-						}
+						foreach (var piece in tempMatches)
+							matchedPieces.Add(piece);
 					}
+					matchCount = 1;
+					tempMatches.Clear();
+					tempMatches.Add(_cell[x, y]);
 				}
-				break;
+			}
 
-			case GameState.ResolvingChain:
-				/*
-						if (AreAllPiecesSettled())
-						{
-							StartCoroutine(PieceMatchCheckUpdate());
-						}
-						*/
-				break;
+			if (matchCount >= MatchThreshold) // ループ終了時もチェック
+			{
+				foreach (var piece in tempMatches)
+					matchedPieces.Add(piece);
+			}
 		}
 
-		if (currentState != tempState)
+		// 縦方向のチェック
+		for (int x = 0; x < Width; x++)
 		{
-			Debug.Log("Change State: " + tempState + "=>" + currentState);
+			int matchCount = 1;
+			List<GameObject> tempMatches = new List<GameObject>();
+			tempMatches.Add(_cell[x, 0]);
+
+			for (int y = 1; y < Height; y++)
+			{
+				if (_cell[x, y] != null && _cell[x, y - 1] != null &&
+					_cell[x, y].tag == _cell[x, y - 1].tag)
+				{
+					matchCount++;
+					tempMatches.Add(_cell[x, y]);
+				}
+				else
+				{
+					if (matchCount >= MatchThreshold)
+					{
+						foreach (var piece in tempMatches)
+							matchedPieces.Add(piece);
+					}
+					matchCount = 1;
+					tempMatches.Clear();
+					tempMatches.Add(_cell[x, y]);
+				}
+			}
+
+			if (matchCount >= MatchThreshold)
+			{
+				foreach (var piece in tempMatches)
+					matchedPieces.Add(piece);
+			}
 		}
+
+		return new List<GameObject>(matchedPieces);
 	}
 
-	void LateUpdate()
+	//	ピース交換時の内部処理(ピース交換アニメーション終了時に呼ばれる)
+	//	・ピースデータを管理する配列(_cell)に対して、交換ピースを移動させる
+	//	・ピースを交換するインデックスをクリア
+	private void SwapPieceInternal()
 	{
-		//Debug.Log("currentState: " + currentState);
-		switch (currentState)
-		{
-			case GameState.WaitingForInput:
-				break;
-
-			case GameState.Matching:
-				break;
-
-			case GameState.SwapAnimating:
-				//StartCoroutine(AnimateMovingPieces());
-				break;
-			case GameState.Falling:
-				//        StartCoroutine(updateCell());
-				break;
-
-			case GameState.ResolvingChain:
-				/*
-						if (AreAllPiecesSettled())
-						{
-							StartCoroutine(PieceMatchCheckUpdate());
-						}
-						*/
-				break;
-		}
+		GameObject temp = _cell[_swapIndex[0].x, _swapIndex[0].y];
+		_cell[_swapIndex[0].x, _swapIndex[0].y] = _cell[_swapIndex[1].x, _swapIndex[1].y];
+		_cell[_swapIndex[1].x, _swapIndex[1].y] = temp;
+		ClearSwapIndex();
 	}
 
+	//	ピース削除時の内部処理(ピース削除アニメーション終了時に呼ばれる)
+	//	・削除されたピースをピースデータを管理する配列(_cell)から消去
+	//	・削除されたピースをDestory
+	//	・マッチしたピースのリスト(_matchedPieces)をクリア
+	private void DeletePieceInternal()
+	{
+		foreach (var piece in _matchedPieces)
+		{
+			Vector2Int cellPos = ConvertFromTransformToCell(piece.transform.position);
+			_cell[cellPos.x, cellPos.y] = null; // データを削除
+			Destroy(piece);
+		}
+		_matchedPieces.Clear();
+	}
+
+	//	ピース落下時の内部処理(ピース落下アニメーション終了時に呼ばれる)
+	//	・ピースデータを管理する配列(_cell)に対して、落下されたピースを移動させる
+	//	・ピースデータを管理する配列(_cell)に対して、移動前データをNULLクリア
+	//	・落下したピースのリスト(__fallingPieces)をクリア
+	private void FallingPieceInternal()
+	{
+		foreach (var (piece, from, to) in _fallingPieces)
+		{
+			_cell[to.x, to.y] = _cell[from.x, from.y];
+			_cell[from.x, from.y] = null;
+		}
+		_fallingPieces.Clear();
+	}
+
+	//	全ピースの移動確認チェック
+	private bool AreAllPiecesSettled()
+	{
+		foreach (GameObject piece in _cell)
+		{
+			if (piece != null && piece.GetComponent<PieceView>().IsMoving())
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	//	全ピースのフェード確認チェック
+	private bool AreAllPiecesFadesCompleted()
+	{
+		foreach (GameObject piece in _cell)
+		{
+			if (piece != null && piece.GetComponent<PieceView>().IsFading())
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+#if false
+#endif
 }

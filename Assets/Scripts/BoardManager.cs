@@ -208,7 +208,7 @@ namespace Match3Puzzle.Game
 				foreach (var piece in _matchedPieces)
 				{
 					// ピースのフェードアウト開始
-					piece.GetComponent<PieceView>().SetFading(PieceView.FadeState.FadingOut);
+					piece.GetComponent<PieceView>().StartFade(PieceView.FadeState.FadingOut);
 				}
 				ChangeGameState(GameState.DeleteFading);
 			}
@@ -247,7 +247,7 @@ namespace Match3Puzzle.Game
 						{
 							// ピースの移動
 							//Debug.Log("Fall x" + x + " y " + aboveY + "=" + y);
-							_cell[x, aboveY].GetComponent<PieceView>().MoveTo(ConvertFromCellToTransform(new Vector2Int(x, y)));
+							_cell[x, aboveY].GetComponent<PieceView>().StartMove(ConvertFromCellToTransform(new Vector2Int(x, y)));
 							_fallingPieces.Add((_cell[x, aboveY], new Vector2Int(x, aboveY), new Vector2Int(x, y)));
 						}
 					}
@@ -268,7 +268,7 @@ namespace Match3Puzzle.Game
 						// 生成時は、描画を待たずにこの段階でm_CellにGameObjectを生成する
 						CreatePieceToGrid(x, y);
 						_cell[x, y].GetComponent<PieceView>().transform.position = ConvertFromCellToTransform(new Vector2Int(x, Height + numAddPiece));
-						_cell[x, y].GetComponent<PieceView>().MoveTo(ConvertFromCellToTransform(new Vector2Int(x, y)));
+						_cell[x, y].GetComponent<PieceView>().StartMove(ConvertFromCellToTransform(new Vector2Int(x, y)));
 						//	_cell[x, y].GetComponent<Renderer>().enabled = false;
 						numAddPiece++;
 					}
@@ -372,8 +372,8 @@ namespace Match3Puzzle.Game
 					SetSwapIndex(ConvertFromTransformToCell(piece.transform.position), ConvertFromTransformToCell(otherPiece.transform.position));
 
 					// ピースの移動開始
-					piece.GetComponent<PieceView>().MoveTo(otherPiece.transform.position);
-					otherPiece.GetComponent<PieceView>().MoveTo(piece.transform.position);
+					piece.GetComponent<PieceView>().StartMove(otherPiece.transform.position);
+					otherPiece.GetComponent<PieceView>().StartMove(piece.transform.position);
 				}
 			}
 		}

@@ -15,12 +15,20 @@ namespace Match3Puzzle.Game
 		}
 		private const float MoveSpeed = 5f;
 		private const float FadeSpeed = 2.0f;
+		private const float PositionThreshold = 0.01f;
 
 		private bool _isMoving = false;                     //	移動中フラグ(trueで移動中)
 		private FadeState _fadeState = FadeState.None;      //	フェード状態
 		private Vector3 _targetPosition;                    //	目標移動位置
+		private SpriteRenderer _spriteRenderer;
 
 		//--------	Lifecycle Methods	--------
+		private void Awake()
+		{
+			//	キャッシュして処理負荷軽減
+			_spriteRenderer = GetComponent<SpriteRenderer>();
+		}
+
 		private void LateUpdate()
 		{
 			ExecuteMove();
@@ -55,7 +63,7 @@ namespace Match3Puzzle.Game
 			if (_isMoving)
 			{
 				transform.position = Vector3.Lerp(transform.position, _targetPosition, MoveSpeed * Time.deltaTime);
-				if (Vector3.Distance(transform.position, _targetPosition) < 0.01f)
+				if (Vector3.Distance(transform.position, _targetPosition) < PositionThreshold)
 				{
 					transform.position = _targetPosition;
 					_isMoving = false;
@@ -65,14 +73,13 @@ namespace Match3Puzzle.Game
 		//	フェード系
 		private void ExecuteFade()
 		{
-			SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
-			Color color = spriteRenderer.color;
+			Color color = _spriteRenderer.color;
 			switch (_fadeState)
 			{
 				case FadeState.FadingIn:
 					color.a += FadeSpeed * Time.deltaTime;
 					color.a = Mathf.Clamp01(color.a);
-					spriteRenderer.color = color;
+					_spriteRenderer.color = color;
 
 					if (color.a >= 1) // 完全に不透明になったら処理を停止
 					{
@@ -82,7 +89,7 @@ namespace Match3Puzzle.Game
 				case FadeState.FadingOut:
 					color.a -= FadeSpeed * Time.deltaTime;
 					color.a = Mathf.Clamp01(color.a);
-					spriteRenderer.color = color;
+					_spriteRenderer.color = color;
 
 					if (color.a <= 0) // 完全に透明になったら処理を停止
 					{

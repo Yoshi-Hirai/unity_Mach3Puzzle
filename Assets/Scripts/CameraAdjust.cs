@@ -4,6 +4,10 @@ namespace Match3Puzzle.Game
 {
 	public class CameraAdjust : MonoBehaviour
 	{
+		private const float HeightBufferRatio = 1.8f;
+		private const float WideBufferRatio = 2f;
+		private const float CameraYOffset = 0.75f;
+
 		private int _gridWidth;     // グリッドの横サイズ
 		private int _gridHeight;    // グリッドの縦サイズ
 		private float _cellSize;     // 各ピースのサイズ
@@ -22,12 +26,14 @@ namespace Match3Puzzle.Game
 			AdjustCamera();
 		}
 
-		// Update is called once per frame
+#if UNITY_EDITOR
+		//	Update is called once per frame
+		//	エディタ時のみ有効
 		private void Update()
 		{
-			// このメソッドは将来的な拡張用のプレースホルダー
-		}
 
+		}
+#endif
 		//--------	Public Methods	--------
 
 		//--------	private Methods	--------
@@ -44,16 +50,16 @@ namespace Match3Puzzle.Game
 			if (screenRatio >= targetRatio)
 			{
 				// 画面が横長の場合 → 高さ基準でカメラサイズを設定(少し大きくはみ出るので 2 -> 1.8)
-				cam.orthographicSize = (_gridHeight * _cellSize) / 1.8f;
+				cam.orthographicSize = (_gridHeight * _cellSize) / HeightBufferRatio;
 			}
 			else
 			{
 				// 画面が縦長の場合 → 幅基準でカメラサイズを設定
-				cam.orthographicSize = ((_gridWidth * _cellSize) / screenRatio) / 2f;
+				cam.orthographicSize = ((_gridWidth * _cellSize) / screenRatio) / WideBufferRatio;
 			}
 
 			// グリッドの中心にカメラを配置(上によっているのでYオフセット+0.75f)
-			cam.transform.position = new Vector3((_gridWidth - 1) * _cellSize / 2, (_gridHeight - 1) * _cellSize / 2 + 0.75f, -10);
+			cam.transform.position = new Vector3((_gridWidth - 1) * _cellSize / 2, (_gridHeight - 1) * _cellSize / 2 + CameraYOffset, -10);
 			// Debug用：カメラ位置確認のため残しています
 			//Debug.Log("size" + cam.orthographicSize + " " + cam.transform.position.y);
 		}

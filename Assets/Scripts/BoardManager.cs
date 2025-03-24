@@ -26,6 +26,13 @@ namespace Match3Puzzle.Game
 		private const int NotSelected = -1;                     //	ピースが選択されていない
 		private const int MatchThreshold = 3;                   //	マッチと判断されるピース数閾値
 
+		//	Instanceプロパティの追加
+		public static BoardManager Instance { get; private set; }
+		//	アクセス
+		public int BoardWidth => Width;
+		public int BoardHeight => Height;
+		public Grid BoardGrid => _grid;
+
 		//	インスペクタで設定する変数
 		[SerializeField] private int Width;                     //	盤面の幅
 		[SerializeField] private int Height;                    //	盤面の高さ
@@ -48,7 +55,15 @@ namespace Match3Puzzle.Game
 		//	オブジェクト生成時
 		private void Awake()
 		{
-			// このメソッドは将来的な拡張用のプレースホルダー
+			if (Instance == null)
+			{
+				Instance = this;
+			}
+			else
+			{
+				Debug.LogWarning("BoardManager instance already exists, destroying duplicate!");
+				Destroy(gameObject);
+			}
 		}
 
 		//	Start is called once before the first execution of Update after the MonoBehaviour is created(最初のフレームの前)
@@ -352,7 +367,7 @@ namespace Match3Puzzle.Game
 			// 入れ替え判定
 			if (Mathf.Abs(swipeDirection.x) > swipeThreshold || Mathf.Abs(swipeDirection.y) > swipeThreshold)
 			{
-				Vector2Int direction = Vector2Int.zero;
+				Vector2Int direction;
 				if (Mathf.Abs(swipeDirection.x) > Mathf.Abs(swipeDirection.y))
 				{
 					direction = (swipeDirection.x > 0 ? Vector2Int.right : Vector2Int.left);

@@ -25,6 +25,7 @@ namespace Match3Puzzle.Game
 		}
 		private const int NotSelected = -1;                     //	ピースが選択されていない
 		private const int MatchThreshold = 3;                   //	マッチと判断されるピース数閾値
+		private const int MaxFixInitialMatches = 64;            //	初期盤面の修正処理を実施する最大回数
 
 		//	Instanceプロパティの追加
 		public static BoardManager Instance { get; private set; }
@@ -44,9 +45,9 @@ namespace Match3Puzzle.Game
 		private Tilemap _tileMap;           //	背景タイルデータの管理(子Object:Tilemap)
 		private Grid _grid;                 //	子Object:Grid
 
-		private GameObject _selectedPiece;          //	操作で選択されたピース
-		private Vector2Int[] _swapIndex;            //	ピースを交換するインデックス(cellの位置。[NotSelected, NotSelected]で未設定)
-		private List<GameObject> _matchedPieces;    //	マッチしたピース(GameObject)のリスト
+		private GameObject _selectedPiece;                  //	操作で選択されたピース
+		private Vector2Int[] _swapIndex;                    //	ピースを交換するインデックス(cellの位置。[NotSelected, NotSelected]で未設定)
+		private List<(GameObject, int)> _matchedPieces;     //	マッチしたピース(GameObject)のリスト
 
 		//	落下するピース情報のリスト
 		private readonly List<(GameObject piece, Vector2Int from, Vector2Int to)> _fallingPieces = new List<(GameObject, Vector2Int, Vector2Int)>();
@@ -90,6 +91,9 @@ namespace Match3Puzzle.Game
 					CreatePieceToGrid(x, y);
 				}
 			}
+
+			//	初期マッチを排除する
+			FixInitialMatches();
 		}
 
 		// Update is called once per frame(毎フレーム)
@@ -220,7 +224,7 @@ namespace Match3Puzzle.Game
 			if (_matchedPieces.Count != 0)
 			{
 				// マッチしたピースに削除アニメーションを指示。アニメーション終了後、削除し_cellを更新
-				foreach (var piece in _matchedPieces)
+				foreach (var (piece, _) in _matchedPieces)
 				{
 					// ピースのフェードアウト開始
 					piece.GetComponent<PieceView>().StartFade(PieceView.FadeState.FadingOut);
@@ -291,6 +295,40 @@ namespace Match3Puzzle.Game
 			}
 		}
 
+		//	初期盤面の修正
+		//	初期配置で3マッチ以上のピースがあれば、それを検出して 一部を置き換える
+		private void FixInitialMatches()
+		{
+			for (int i = 0; i < MaxFixInitialMatches; i++)
+			{
+				List<(GameObject, int)> matchedPieces = CheckPieceMatch();
+				HashSet<int> modifiedIndices = new HashSet<int>();      //	重複を防ぐため HashSet を使用
+				int modifiedIndicesCounter = 0;                         //	変換するピース順の管理用
+				Debug.Log("MatchPiece " + i + " Count[Init]: " + matchedPieces.Count);
+				//	マッチしているピースがなければ終了
+				if (matchedPieces.Count <= 0) return;
+
+				// 同じマッチ内のピース群を一意なID(clusterId)で識別し、最小限だけ修正して再生成
+				foreach (var (piece, clusterId) in matchedPieces)
+				{
+					if (!modifiedIndices.Contains(clusterId))
+					{
+						if (modifiedIndicesCounter <= 0)
+						{   // マッチした2つ目のピースを変更する
+							modifiedIndicesCounter++;
+							continue;
+						}
+						Vector2Int cellPos = ConvertFromTransformToCell(piece.transform.position);
+						Debug.Log("Regist " + clusterId + " (" + cellPos.x + "," + cellPos.y + ")");
+						RemovePiece(piece);
+						CreatePieceToGrid(cellPos.x, cellPos.y);
+						modifiedIndices.Add(clusterId);
+						modifiedIndicesCounter = 0;
+					}
+				}
+			}
+		}
+
 		//	ピースを交換するインデックス(_swapIndex)関連
 		private void SetSwapIndex(Vector2Int index0, Vector2Int index1)
 		{
@@ -321,6 +359,16 @@ namespace Match3Puzzle.Game
 			GameObject cell = Instantiate(PiecesPatterns[pieceIndex], _grid.GetCellCenterWorld(new Vector3Int(x, y, 0)), Quaternion.identity);
 			cell.AddComponent<PieceView>(); // PieceView を自動でアタッチ
 			_cell[x, y] = cell;
+		}
+
+		//	指定されたピースを取り除く
+		//	・削除されたピースをピースデータを管理する配列(_cell)から消去
+		//	・削除されたピースをDestory
+		private void RemovePiece(GameObject piece)
+		{
+			Vector2Int cellPos = ConvertFromTransformToCell(piece.transform.position);
+			_cell[cellPos.x, cellPos.y] = null; // セル情報から削除
+			Destroy(piece);                     // 表示上も削除
 		}
 
 		//	ピース選択時の処理
@@ -394,9 +442,10 @@ namespace Match3Puzzle.Game
 		}
 
 		// 横・縦方向にピースをチェック
-		private List<GameObject> CheckPieceMatch()
+		private List<(GameObject, int)> CheckPieceMatch()
 		{
-			HashSet<GameObject> matchedPieces = new HashSet<GameObject>(); // 重複を防ぐため HashSet を使用
+			HashSet<(GameObject, int)> matchedPieces = new HashSet<(GameObject, int)>(); // 重複を防ぐため HashSet を使用
+			int matchIndex = 0;
 
 			// 横方向のチェック
 			for (int y = 0; y < Height; y++)
@@ -418,7 +467,8 @@ namespace Match3Puzzle.Game
 						if (matchCount >= MatchThreshold)   // MatchThreshold以上並んでいたら追加
 						{
 							foreach (var piece in tempMatches)
-								matchedPieces.Add(piece);
+								matchedPieces.Add((piece, matchIndex));
+							matchIndex++;
 						}
 						matchCount = 1;
 						tempMatches.Clear();
@@ -429,7 +479,8 @@ namespace Match3Puzzle.Game
 				if (matchCount >= MatchThreshold) // ループ終了時もチェック
 				{
 					foreach (var piece in tempMatches)
-						matchedPieces.Add(piece);
+						matchedPieces.Add((piece, matchIndex));
+					matchIndex++;
 				}
 			}
 
@@ -453,7 +504,8 @@ namespace Match3Puzzle.Game
 						if (matchCount >= MatchThreshold)
 						{
 							foreach (var piece in tempMatches)
-								matchedPieces.Add(piece);
+								matchedPieces.Add((piece, matchIndex));
+							matchIndex++;
 						}
 						matchCount = 1;
 						tempMatches.Clear();
@@ -464,11 +516,12 @@ namespace Match3Puzzle.Game
 				if (matchCount >= MatchThreshold)
 				{
 					foreach (var piece in tempMatches)
-						matchedPieces.Add(piece);
+						matchedPieces.Add((piece, matchIndex));
+					matchIndex++;
 				}
 			}
 
-			return new List<GameObject>(matchedPieces);
+			return new List<(GameObject, int)>(matchedPieces);
 		}
 
 		//	ピース交換時の内部処理(ピース交換アニメーション終了時に呼ばれる)
@@ -483,16 +536,13 @@ namespace Match3Puzzle.Game
 		}
 
 		//	ピース削除時の内部処理(ピース削除アニメーション終了時に呼ばれる)
-		//	・削除されたピースをピースデータを管理する配列(_cell)から消去
-		//	・削除されたピースをDestory
+		//	・削除されたピースを取り除く
 		//	・マッチしたピースのリスト(_matchedPieces)をクリア
 		private void DeletePieceInternal()
 		{
-			foreach (var piece in _matchedPieces)
+			foreach (var (piece, _) in _matchedPieces)
 			{
-				Vector2Int cellPos = ConvertFromTransformToCell(piece.transform.position);
-				_cell[cellPos.x, cellPos.y] = null; // データを削除
-				Destroy(piece);
+				RemovePiece(piece);
 			}
 			_matchedPieces.Clear();
 		}

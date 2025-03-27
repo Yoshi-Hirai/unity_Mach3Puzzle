@@ -102,11 +102,7 @@ namespace Match3Puzzle.Game
 				Debug.LogError("InputManager が割り当てられていません！");
 				return;
 			}
-			_inputManager.OnPieceSwiped += (piece, direction) =>
-			{
-				ExecutePieceSwap(piece, direction);
-				ChangeGameState(GameState.SwapAnimating);
-			};
+			_inputManager.OnPieceSwiped += ExecutePieceSelection;
 		}
 
 		// Update is called once per frame(毎フレーム)
@@ -204,6 +200,10 @@ namespace Match3Puzzle.Game
 		}
 
 		//--------	Event Methods	--------
+		void OnDestroy()
+		{
+			_inputManager.OnPieceSwiped -= ExecutePieceSelection;
+		}
 
 		//--------	Public Methods	--------
 
@@ -372,6 +372,13 @@ namespace Match3Puzzle.Game
 			Vector2Int cellPos = ConvertFromTransformToCell(piece.transform.position);
 			_cell[cellPos.x, cellPos.y] = null; // セル情報から削除
 			Destroy(piece);                     // 表示上も削除
+		}
+
+		//	ピース選択時の処理
+		private void ExecutePieceSelection(GameObject piece, Vector2 direction)
+		{
+			ExecutePieceSwap(piece, direction);
+			ChangeGameState(GameState.SwapAnimating);
 		}
 
 		//  ピース交換処理

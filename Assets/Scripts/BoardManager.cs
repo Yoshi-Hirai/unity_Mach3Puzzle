@@ -40,12 +40,13 @@ namespace Match3Puzzle.Game
 		[SerializeField] private Tile[] GroundPatterns;         //	背景タイルテクスチャパターン
 		[SerializeField] private GameObject[] PiecesPatterns;   //	ピースパターン(prefab)
 
+		[SerializeField] private InputManager _inputManager;
+
 		private GameState _currentState = GameState.WaitingForInput;
 		private GameObject[,] _cell;        //	ピースデータの管理
 		private Tilemap _tileMap;           //	背景タイルデータの管理(子Object:Tilemap)
 		private Grid _grid;                 //	子Object:Grid
 
-		private GameObject _selectedPiece;                  //	操作で選択されたピース
 		private Vector2Int[] _swapIndex;                    //	ピースを交換するインデックス(cellの位置。[NotSelected, NotSelected]で未設定)
 		private List<(GameObject, int)> _matchedPieces;     //	マッチしたピース(GameObject)のリスト
 
@@ -94,6 +95,18 @@ namespace Match3Puzzle.Game
 
 			//	初期マッチを排除する
 			FixInitialMatches();
+
+			//	InputManagerのデリゲートを設定する
+			if (_inputManager == null)
+			{
+				Debug.LogError("InputManager が割り当てられていません！");
+				return;
+			}
+			_inputManager.OnPieceSwiped += (piece, direction) =>
+			{
+				ExecutePieceSwap(piece, direction);
+				ChangeGameState(GameState.SwapAnimating);
+			};
 		}
 
 		// Update is called once per frame(毎フレーム)
@@ -204,17 +217,7 @@ namespace Match3Puzzle.Game
 		//	各ゲームステートのHandle
 		private void HandleWaitingForInput()
 		{
-			//  タッチ(タップ) or クリックを検出
-			//  ?? false → タッチデバイスが存在しない場合は false にする
-			bool isTouchStart = Touchscreen.current?.primaryTouch.press.wasPressedThisFrame ?? false;
-			bool isTouchEnd = Touchscreen.current?.primaryTouch.press.wasReleasedThisFrame ?? false;
-			bool isClickStart = Mouse.current?.leftButton.wasPressedThisFrame ?? false;
-			bool isClickEnd = Mouse.current?.leftButton.wasReleasedThisFrame ?? false;
-
-			if (isTouchStart || isClickStart || isTouchEnd || isClickEnd)
-			{
-				ExecutePieceSelection();
-			}
+			_inputManager.ProcessInput();
 		}
 
 		private void HandleMatching()
@@ -369,43 +372,6 @@ namespace Match3Puzzle.Game
 			Vector2Int cellPos = ConvertFromTransformToCell(piece.transform.position);
 			_cell[cellPos.x, cellPos.y] = null; // セル情報から削除
 			Destroy(piece);                     // 表示上も削除
-		}
-
-		//	ピース選択時の処理
-		private void ExecutePieceSelection()
-		{
-			//	入力位置の取得 -> スクリーン座標をワールド座標に変換
-			Vector2 inputPos = Touchscreen.current?.primaryTouch.position.ReadValue() ?? Mouse.current.position.ReadValue();
-			Vector3 worldPos = Camera.main.ScreenToWorldPoint(inputPos);
-
-			if (_selectedPiece == null)
-			{
-				//	1つ目のピース選択
-				//	2D用の Raycast を使用(「指定した座標にオブジェクトがあるか」調べる)
-				//	Physics2D.Raycast(Vector2 origin, Vector2 direction, float distance, int layerMask);
-				//	origin		Ray の開始位置（ワールド座標）
-				//	direction	Ray の飛ぶ方向（通常は Vector2.zero で「その点」をチェック）
-				//	distance	Ray の距離（通常は Mathf.Infinity）
-				//	layerMask	当たり判定のレイヤー（~0 なら全レイヤー）
-				RaycastHit2D hit = Physics2D.Raycast(worldPos, Vector2.zero);
-				if (hit.collider != null)
-				{
-					_selectedPiece = hit.collider.gameObject;
-					//Debug.Log($"選択されたピース: {_selectedPiece.name}");
-				}
-			}
-			else
-			{
-				//	2つ目のピース(入れ替え先)を選択
-				Vector2 selectedPiece2D = new Vector2(_selectedPiece.transform.position.x, _selectedPiece.transform.position.y);
-				Vector2 worldPos2D = new Vector2(worldPos.x, worldPos.y);
-				Vector2 swipeDirection = worldPos2D - selectedPiece2D;
-				Debug.Log($"スワップ方向: {swipeDirection}");
-				ExecutePieceSwap(_selectedPiece, swipeDirection);
-				_selectedPiece = null; // 選択解除
-
-				ChangeGameState(GameState.SwapAnimating);
-			}
 		}
 
 		//  ピース交換処理

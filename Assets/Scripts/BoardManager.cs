@@ -33,7 +33,7 @@ namespace Match3Puzzle.Game
 			Matched_5PiecesT,   //	5つをT字にそろえる
 			Matched_5PiecesL,   //	5つをL字にそろえる
 		}
-		private const int NotSelected = -1;                     //	ピースが選択されていない
+		private const float SwipeThreshold = 0.5f;              //	スワイプ判定閾値
 		private const int MatchThreshold = 3;                   //	マッチと判断されるピース数閾値
 		private const int MaxFixInitialMatches = 64;            //	初期盤面の修正処理を実施する最大回数
 
@@ -56,8 +56,8 @@ namespace Match3Puzzle.Game
 		private GameObject[,] _cell;        //	ピースデータの管理
 		private Tilemap _tileMap;           //	背景タイルデータの管理(子Object:Tilemap)
 		private Grid _grid;                 //	子Object:Grid
+		private PieceSwapper _pieceSwapper; //
 
-		private Vector2Int[] _swapIndex;                                //	ピースを交換するインデックス(cellの位置。[NotSelected, NotSelected]で未設定)
 		private List<(GameObject, MatchedType, int)> _matchedPieces;    //	マッチしたピース(GameObject)のリスト
 
 		//	落下するピース情報のリスト
@@ -87,8 +87,7 @@ namespace Match3Puzzle.Game
 			_tileMap = GetComponentInChildren<Tilemap>();
 			_grid = GetComponentInChildren<Grid>();
 			_cell = new GameObject[Width, Height];
-			_swapIndex = new Vector2Int[2];
-			ClearSwapIndex();
+			_pieceSwapper = new PieceSwapper(_cell);
 
 			for (int y = 0; y < Height; ++y)
 			{
@@ -127,7 +126,7 @@ namespace Match3Puzzle.Game
 				case GameState.SwapAnimating:
 					if (AreAllPiecesSettled())
 					{
-						SwapPieceInternal();
+						_pieceSwapper.SwapPieceInternal();
 						ChangeGameState(GameState.Matching);
 					}
 					break;
@@ -365,17 +364,6 @@ namespace Match3Puzzle.Game
 			}
 		}
 
-		//	ピースを交換するインデックス(_swapIndex)関連
-		private void SetSwapIndex(Vector2Int index0, Vector2Int index1)
-		{
-			_swapIndex[0] = index0;
-			_swapIndex[1] = index1;
-		}
-		private void ClearSwapIndex()
-		{
-			SetSwapIndex(new Vector2Int(NotSelected, NotSelected), new Vector2Int(NotSelected, NotSelected));
-		}
-
 		// transform.position <=> m_cellインデックス変換
 		private Vector2Int ConvertFromTransformToCell(Vector3 transformPosition)
 		{
@@ -417,9 +405,8 @@ namespace Match3Puzzle.Game
 		//  ピース交換処理
 		private void ExecutePieceSwap(GameObject piece, Vector2 swipeDirection)
 		{
-			float swipeThreshold = 0.5f;
 			// 入れ替え判定
-			if (Mathf.Abs(swipeDirection.x) > swipeThreshold || Mathf.Abs(swipeDirection.y) > swipeThreshold)
+			if (Mathf.Abs(swipeDirection.x) > SwipeThreshold || Mathf.Abs(swipeDirection.y) > SwipeThreshold)
 			{
 				Vector2Int direction;
 				if (Mathf.Abs(swipeDirection.x) > Mathf.Abs(swipeDirection.y))
@@ -438,11 +425,8 @@ namespace Match3Puzzle.Game
 				{
 					GameObject otherPiece = hit.collider.gameObject;    //  入れ替え先のピースオブジェクト
 																		//  m_cellのインデックスを算出 -> 内部データ(_cell)更新用に保持
-					SetSwapIndex(ConvertFromTransformToCell(piece.transform.position), ConvertFromTransformToCell(otherPiece.transform.position));
-
-					// ピースの移動開始
-					piece.GetComponent<PieceView>().StartMove(otherPiece.transform.position);
-					otherPiece.GetComponent<PieceView>().StartMove(piece.transform.position);
+					_pieceSwapper.Swap(piece, otherPiece,
+						ConvertFromTransformToCell(piece.transform.position), ConvertFromTransformToCell(otherPiece.transform.position));
 				}
 			}
 		}
@@ -532,17 +516,6 @@ namespace Match3Puzzle.Game
 			}
 
 			return new List<(GameObject, MatchedType, int)>(matchedPieces);
-		}
-
-		//	ピース交換時の内部処理(ピース交換アニメーション終了時に呼ばれる)
-		//	・ピースデータを管理する配列(_cell)に対して、交換ピースを移動させる
-		//	・ピースを交換するインデックスをクリア
-		private void SwapPieceInternal()
-		{
-			GameObject temp = _cell[_swapIndex[0].x, _swapIndex[0].y];
-			_cell[_swapIndex[0].x, _swapIndex[0].y] = _cell[_swapIndex[1].x, _swapIndex[1].y];
-			_cell[_swapIndex[1].x, _swapIndex[1].y] = temp;
-			ClearSwapIndex();
 		}
 
 		//	ピース削除時の内部処理(ピース削除アニメーション終了時に呼ばれる)

@@ -21,6 +21,7 @@ namespace Match3Puzzle.Game
 		//--------	Public Methods	--------
 
 		//  ピース交換処理
+		//	入力に応じて アニメーション付きで入れ替え命令を出す
 		public void Swap(GameObject piece, GameObject otherPiece, Vector2Int pieceCellPos, Vector2Int otherPieceCellPos)
 		{
 			SetSwapIndex(pieceCellPos, otherPieceCellPos);
@@ -35,6 +36,10 @@ namespace Match3Puzzle.Game
 		//	・ピースを交換するインデックスをクリア
 		public void SwapPieceInternal()
 		{
+			if (!IsSwapIndexValid() || (_cell[_swapIndex[0].x, _swapIndex[0].y] == null) || (_cell[_swapIndex[1].x, _swapIndex[1].y] == null))
+			{
+				return;
+			}
 			GameObject temp = _cell[_swapIndex[0].x, _swapIndex[0].y];
 			_cell[_swapIndex[0].x, _swapIndex[0].y] = _cell[_swapIndex[1].x, _swapIndex[1].y];
 			_cell[_swapIndex[1].x, _swapIndex[1].y] = temp;
@@ -47,6 +52,12 @@ namespace Match3Puzzle.Game
 		}
 
 		//--------	Private Methods	--------
+
+		//	スワップの選択状態チェック
+		private bool IsSwapIndexValid()
+		{
+			return _swapIndex[0].x != NotSelected && _swapIndex[1].x != NotSelected;
+		}
 
 		//	ピースを交換するインデックス(_swapIndex)関連
 		private void SetSwapIndex(Vector2Int index0, Vector2Int index1)

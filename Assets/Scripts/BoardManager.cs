@@ -23,6 +23,16 @@ namespace Match3Puzzle.Game
 			CreatingAnimating,  //	ピースの追加アニメーション
 			ResolvingChain,     //	連鎖の処理 -> Matching に遷移させて連鎖処理を行わせることができているため不要。
 		}
+		public enum MatchedType
+		{
+			Matched_None,       //	なし
+			Matched_3Pieces,    //	縦または横に3つを一列にそろえる
+			Matched_4Pieces,    //	縦または横に4つを一列にそろえる
+			Matched_Square,     //	4つを正方形にそろえる(縦2x横2)
+			Matched_5Pieces,    //	縦または横に5つを一列にそろえる
+			Matched_5PiecesT,   //	5つをT字にそろえる
+			Matched_5PiecesL,   //	5つをL時にそろえる
+		}
 		private const int NotSelected = -1;                     //	ピースが選択されていない
 		private const int MatchThreshold = 3;                   //	マッチと判断されるピース数閾値
 		private const int MaxFixInitialMatches = 64;            //	初期盤面の修正処理を実施する最大回数
@@ -47,8 +57,8 @@ namespace Match3Puzzle.Game
 		private Tilemap _tileMap;           //	背景タイルデータの管理(子Object:Tilemap)
 		private Grid _grid;                 //	子Object:Grid
 
-		private Vector2Int[] _swapIndex;                    //	ピースを交換するインデックス(cellの位置。[NotSelected, NotSelected]で未設定)
-		private List<(GameObject, int)> _matchedPieces;     //	マッチしたピース(GameObject)のリスト
+		private Vector2Int[] _swapIndex;                                //	ピースを交換するインデックス(cellの位置。[NotSelected, NotSelected]で未設定)
+		private List<(GameObject, MatchedType, int)> _matchedPieces;    //	マッチしたピース(GameObject)のリスト
 
 		//	落下するピース情報のリスト
 		private readonly List<(GameObject piece, Vector2Int from, Vector2Int to)> _fallingPieces = new List<(GameObject, Vector2Int, Vector2Int)>();
@@ -227,7 +237,7 @@ namespace Match3Puzzle.Game
 			if (_matchedPieces.Count != 0)
 			{
 				// マッチしたピースに削除アニメーションを指示。アニメーション終了後、削除し_cellを更新
-				foreach (var (piece, _) in _matchedPieces)
+				foreach (var (piece, _, _) in _matchedPieces)
 				{
 					// ピースのフェードアウト開始
 					piece.GetComponent<PieceView>().StartFade(PieceView.FadeState.FadingOut);
@@ -298,13 +308,36 @@ namespace Match3Puzzle.Game
 			}
 		}
 
+		//	MatchedType の判定
+		private static MatchedType DetermineMatchedType(int matchCount)
+		{
+			if (matchCount == 3)
+			{
+				return MatchedType.Matched_3Pieces;
+			}
+			else if (matchCount == 4)
+			{
+				return MatchedType.Matched_4Pieces;
+			}
+			else if (matchCount == 5)
+			{
+				return MatchedType.Matched_5Pieces;
+			}
+			else
+			{
+				return MatchedType.Matched_None;
+			}
+		}
+
+
+
 		//	初期盤面の修正
 		//	初期配置で3マッチ以上のピースがあれば、それを検出して 一部を置き換える
 		private void FixInitialMatches()
 		{
 			for (int i = 0; i < MaxFixInitialMatches; i++)
 			{
-				List<(GameObject, int)> matchedPieces = CheckPieceMatch();
+				List<(GameObject, MatchedType, int)> matchedPieces = CheckPieceMatch();
 				HashSet<int> modifiedIndices = new HashSet<int>();      //	重複を防ぐため HashSet を使用
 				int modifiedIndicesCounter = 0;                         //	変換するピース順の管理用
 				Debug.Log("MatchPiece " + i + " Count[Init]: " + matchedPieces.Count);
@@ -312,7 +345,7 @@ namespace Match3Puzzle.Game
 				if (matchedPieces.Count <= 0) return;
 
 				// 同じマッチ内のピース群を一意なID(clusterId)で識別し、最小限だけ修正して再生成
-				foreach (var (piece, clusterId) in matchedPieces)
+				foreach (var (piece, _, clusterId) in matchedPieces)
 				{
 					if (!modifiedIndices.Contains(clusterId))
 					{
@@ -415,9 +448,9 @@ namespace Match3Puzzle.Game
 		}
 
 		// 横・縦方向にピースをチェック
-		private List<(GameObject, int)> CheckPieceMatch()
+		private List<(GameObject, MatchedType, int)> CheckPieceMatch()
 		{
-			HashSet<(GameObject, int)> matchedPieces = new HashSet<(GameObject, int)>(); // 重複を防ぐため HashSet を使用
+			HashSet<(GameObject, MatchedType, int)> matchedPieces = new HashSet<(GameObject, MatchedType, int)>(); // 重複を防ぐため HashSet を使用
 			int matchIndex = 0;
 
 			// 横方向のチェック
@@ -439,8 +472,9 @@ namespace Match3Puzzle.Game
 					{
 						if (matchCount >= MatchThreshold)   // MatchThreshold以上並んでいたら追加
 						{
+							MatchedType matchedType = DetermineMatchedType(matchCount);
 							foreach (var piece in tempMatches)
-								matchedPieces.Add((piece, matchIndex));
+								matchedPieces.Add((piece, matchedType, matchIndex));
 							matchIndex++;
 						}
 						matchCount = 1;
@@ -451,8 +485,9 @@ namespace Match3Puzzle.Game
 
 				if (matchCount >= MatchThreshold) // ループ終了時もチェック
 				{
+					MatchedType matchedType = DetermineMatchedType(matchCount);
 					foreach (var piece in tempMatches)
-						matchedPieces.Add((piece, matchIndex));
+						matchedPieces.Add((piece, matchedType, matchIndex));
 					matchIndex++;
 				}
 			}
@@ -476,8 +511,9 @@ namespace Match3Puzzle.Game
 					{
 						if (matchCount >= MatchThreshold)
 						{
+							MatchedType matchedType = DetermineMatchedType(matchCount);
 							foreach (var piece in tempMatches)
-								matchedPieces.Add((piece, matchIndex));
+								matchedPieces.Add((piece, matchedType, matchIndex));
 							matchIndex++;
 						}
 						matchCount = 1;
@@ -488,13 +524,14 @@ namespace Match3Puzzle.Game
 
 				if (matchCount >= MatchThreshold)
 				{
+					MatchedType matchedType = DetermineMatchedType(matchCount);
 					foreach (var piece in tempMatches)
-						matchedPieces.Add((piece, matchIndex));
+						matchedPieces.Add((piece, matchedType, matchIndex));
 					matchIndex++;
 				}
 			}
 
-			return new List<(GameObject, int)>(matchedPieces);
+			return new List<(GameObject, MatchedType, int)>(matchedPieces);
 		}
 
 		//	ピース交換時の内部処理(ピース交換アニメーション終了時に呼ばれる)
@@ -513,7 +550,7 @@ namespace Match3Puzzle.Game
 		//	・マッチしたピースのリスト(_matchedPieces)をクリア
 		private void DeletePieceInternal()
 		{
-			foreach (var (piece, _) in _matchedPieces)
+			foreach (var (piece, _, _) in _matchedPieces)
 			{
 				RemovePiece(piece);
 			}

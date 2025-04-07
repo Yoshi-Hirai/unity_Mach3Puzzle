@@ -31,7 +31,7 @@ namespace Match3Puzzle.Game
 			Matched_Square,     //	4つを正方形にそろえる(縦2x横2)
 			Matched_5Pieces,    //	縦または横に5つを一列にそろえる
 			Matched_5PiecesT,   //	5つをT字にそろえる
-			Matched_5PiecesL,   //	5つをL時にそろえる
+			Matched_5PiecesL,   //	5つをL字にそろえる
 		}
 		private const int NotSelected = -1;                     //	ピースが選択されていない
 		private const int MatchThreshold = 3;                   //	マッチと判断されるピース数閾値

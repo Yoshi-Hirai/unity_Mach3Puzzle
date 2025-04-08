@@ -57,6 +57,7 @@ namespace Match3Puzzle.Game
 		private Tilemap _tileMap;           //	背景タイルデータの管理(子Object:Tilemap)
 		private Grid _grid;                 //	子Object:Grid
 		private PieceSwapper _pieceSwapper; //
+		private PieceRemover _pieceRemover; //
 
 		private List<(GameObject, MatchedType, int)> _matchedPieces;    //	マッチしたピース(GameObject)のリスト
 
@@ -88,6 +89,7 @@ namespace Match3Puzzle.Game
 			_grid = GetComponentInChildren<Grid>();
 			_cell = new GameObject[Width, Height];
 			_pieceSwapper = new PieceSwapper(_cell);
+			_pieceRemover = new PieceRemover(_cell, ConvertFromTransformToCell);
 
 			for (int y = 0; y < Height; ++y)
 			{
@@ -136,7 +138,8 @@ namespace Match3Puzzle.Game
 				case GameState.DeleteFading:
 					if (AreAllPiecesFadesCompleted())
 					{
-						DeletePieceInternal();
+						_pieceRemover.RemoveMany(_matchedPieces);
+						_matchedPieces.Clear();
 						ChangeGameState(GameState.Falling);
 					}
 					break;
@@ -355,7 +358,7 @@ namespace Match3Puzzle.Game
 						}
 						Vector2Int cellPos = ConvertFromTransformToCell(piece.transform.position);
 						Debug.Log("Regist " + clusterId + " (" + cellPos.x + "," + cellPos.y + ")");
-						RemovePiece(piece);
+						_pieceRemover.Remove(piece);
 						CreatePieceToGrid(cellPos.x, cellPos.y);
 						modifiedIndices.Add(clusterId);
 						modifiedIndicesCounter = 0;
@@ -383,16 +386,6 @@ namespace Match3Puzzle.Game
 			GameObject cell = Instantiate(PiecesPatterns[pieceIndex], _grid.GetCellCenterWorld(new Vector3Int(x, y, 0)), Quaternion.identity);
 			cell.AddComponent<PieceView>(); // PieceView を自動でアタッチ
 			_cell[x, y] = cell;
-		}
-
-		//	指定されたピースを取り除く
-		//	・削除されたピースをピースデータを管理する配列(_cell)から消去
-		//	・削除されたピースをDestory
-		private void RemovePiece(GameObject piece)
-		{
-			Vector2Int cellPos = ConvertFromTransformToCell(piece.transform.position);
-			_cell[cellPos.x, cellPos.y] = null; // セル情報から削除
-			Destroy(piece);                     // 表示上も削除
 		}
 
 		//	ピース選択時の処理
@@ -516,18 +509,6 @@ namespace Match3Puzzle.Game
 			}
 
 			return new List<(GameObject, MatchedType, int)>(matchedPieces);
-		}
-
-		//	ピース削除時の内部処理(ピース削除アニメーション終了時に呼ばれる)
-		//	・削除されたピースを取り除く
-		//	・マッチしたピースのリスト(_matchedPieces)をクリア
-		private void DeletePieceInternal()
-		{
-			foreach (var (piece, _, _) in _matchedPieces)
-			{
-				RemovePiece(piece);
-			}
-			_matchedPieces.Clear();
 		}
 
 		//	ピース落下時の内部処理(ピース落下アニメーション終了時に呼ばれる)

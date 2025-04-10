@@ -51,6 +51,8 @@ namespace Match3Puzzle.Game
 		[SerializeField] private GameObject[] PiecesPatterns;   //	ピースパターン(prefab)
 
 		[SerializeField] private InputManager _inputManager;
+		[SerializeField] private int _debugSeed = 12345;
+		[SerializeField] private bool _useFixedSeed = true;
 
 		private GameState _currentState = GameState.WaitingForInput;
 		private GameObject[,] _cell;        //	ピースデータの管理
@@ -58,6 +60,7 @@ namespace Match3Puzzle.Game
 		private Grid _grid;                 //	子Object:Grid
 		private PieceSwapper _pieceSwapper; //
 		private PieceRemover _pieceRemover; //
+		private PieceSpawner _pieceSpawner; //
 
 		private List<(GameObject, MatchedType, int)> _matchedPieces;    //	マッチしたピース(GameObject)のリスト
 
@@ -82,14 +85,28 @@ namespace Match3Puzzle.Game
 		//	Start is called once before the first execution of Update after the MonoBehaviour is created(最初のフレームの前)
 		//	・グリッド (_cell) の初期化
 		//	・背景 (Tilemap) の生成
-		//	・ピース (CreatePieceToGrid()) の配置
+		//	・ピース (PieceSpawner.CreateToGrid()) の配置
 		private void Start()
 		{
+			//	ランダムシード生成
+			int randomSeedValue = _debugSeed;
+			if (_useFixedSeed)
+			{
+				PieceSpawner.SetRandomSeed(_debugSeed);
+			}
+			else
+			{
+				randomSeedValue = (int)System.DateTime.Now.Ticks;
+				PieceSpawner.SetRandomSeed(randomSeedValue);
+			}
+			Debug.Log($"Seed Used: {randomSeedValue}");
+
 			_tileMap = GetComponentInChildren<Tilemap>();
 			_grid = GetComponentInChildren<Grid>();
 			_cell = new GameObject[Width, Height];
 			_pieceSwapper = new PieceSwapper(_cell);
 			_pieceRemover = new PieceRemover(_cell, ConvertFromTransformToCell);
+			_pieceSpawner = new PieceSpawner(_cell, PiecesPatterns, _grid, ConvertFromCellToTransform);
 
 			for (int y = 0; y < Height; ++y)
 			{
@@ -100,7 +117,7 @@ namespace Match3Puzzle.Game
 					_tileMap.SetTile(new Vector3Int(x, y, 0), GroundPatterns[groundIndex]);
 
 					// ピースを生成し登録
-					CreatePieceToGrid(x, y);
+					_pieceSpawner.CreateToGrid(x, y);
 				}
 			}
 
@@ -299,11 +316,8 @@ namespace Match3Puzzle.Game
 				{
 					if (_cell[x, y] == null)
 					{
-						// 生成時は、描画を待たずにこの段階でm_CellにGameObjectを生成する
-						CreatePieceToGrid(x, y);
-						_cell[x, y].GetComponent<PieceView>().transform.position = ConvertFromCellToTransform(new Vector2Int(x, Height + numAddPiece));
-						_cell[x, y].GetComponent<PieceView>().StartMove(ConvertFromCellToTransform(new Vector2Int(x, y)));
-						//	_cell[x, y].GetComponent<Renderer>().enabled = false;
+						// 生成時は、描画を待たずに下記関数内でこの段階でm_CellにGameObjectを生成する
+						_pieceSpawner.CreateAndDropToGrid(x, y, Height + numAddPiece);
 						numAddPiece++;
 					}
 				}
@@ -359,7 +373,7 @@ namespace Match3Puzzle.Game
 						Vector2Int cellPos = ConvertFromTransformToCell(piece.transform.position);
 						Debug.Log("Regist " + clusterId + " (" + cellPos.x + "," + cellPos.y + ")");
 						_pieceRemover.Remove(piece);
-						CreatePieceToGrid(cellPos.x, cellPos.y);
+						_pieceSpawner.CreateToGrid(cellPos.x, cellPos.y);
 						modifiedIndices.Add(clusterId);
 						modifiedIndicesCounter = 0;
 					}
@@ -376,16 +390,6 @@ namespace Match3Puzzle.Game
 		private Vector3 ConvertFromCellToTransform(Vector2Int cellIndex)
 		{
 			return _grid.GetCellCenterWorld(new Vector3Int(cellIndex.x, cellIndex.y, 0));
-		}
-
-		//	ピース処理関連
-		//	ピースを指定位置に生成し、ピースデータを管理する_cellへ代入する
-		private void CreatePieceToGrid(int x, int y)
-		{
-			int pieceIndex = UnityEngine.Random.Range(0, PiecesPatterns.Length);
-			GameObject cell = Instantiate(PiecesPatterns[pieceIndex], _grid.GetCellCenterWorld(new Vector3Int(x, y, 0)), Quaternion.identity);
-			cell.AddComponent<PieceView>(); // PieceView を自動でアタッチ
-			_cell[x, y] = cell;
 		}
 
 		//	ピース選択時の処理

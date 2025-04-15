@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.Tilemaps;
 using UnityEngine.InputSystem;
 using System;
+using System.IO;
 using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
@@ -108,6 +109,8 @@ namespace Match3Puzzle.Game
 			_pieceRemover = new PieceRemover(_cell, ConvertFromTransformToCell);
 			_pieceSpawner = new PieceSpawner(_cell, PiecesPatterns, _grid, ConvertFromCellToTransform);
 
+			string path = Path.Combine(Application.dataPath, "Resources/locate01.csv");
+			int[,] grid = LoadInitialCsv(path);
 			for (int y = 0; y < Height; ++y)
 			{
 				for (int x = 0; x < Width; ++x)
@@ -117,7 +120,8 @@ namespace Match3Puzzle.Game
 					_tileMap.SetTile(new Vector3Int(x, y, 0), GroundPatterns[groundIndex]);
 
 					// ピースを生成し登録
-					_pieceSpawner.CreateToGrid(x, y);
+					_pieceSpawner.CreateToGridWithType(x, y, grid[x, y]);
+					//_pieceSpawner.CreateToGrid(x, y);
 				}
 			}
 
@@ -345,8 +349,6 @@ namespace Match3Puzzle.Game
 			}
 		}
 
-
-
 		//	初期盤面の修正
 		//	初期配置で3マッチ以上のピースがあれば、それを検出して 一部を置き換える
 		private void FixInitialMatches()
@@ -379,6 +381,48 @@ namespace Match3Puzzle.Game
 					}
 				}
 			}
+		}
+
+		//	初期盤面用のCSVデータ読み込み
+		public static int[,] LoadInitialCsv(string filePath)
+		{
+			if (!File.Exists(filePath))
+			{
+				Console.WriteLine("ファイルが見つかりません: " + filePath);
+				return null;
+			}
+
+			List<string[]> lines = new List<string[]>();
+
+			using (var reader = new StreamReader(filePath))
+			{
+				while (!reader.EndOfStream)
+				{
+					string line = reader.ReadLine();
+					string[] values = line.Split(',');
+					lines.Add(values);
+				}
+			}
+
+			int rowCount = lines.Count;
+			int colCount = lines[0].Length;
+			int[,] result = new int[colCount, rowCount];
+
+			for (int row = 0; row < rowCount; row++)
+			{
+				//	盤面のY座標系は画面上に向かっている。(csvは下に向かっている)
+				int resultRow = rowCount - 1 - row;
+				for (int col = 0; col < colCount; col++)
+				{
+					if (!int.TryParse(lines[row][col], out result[col, resultRow]))
+					{
+						Console.WriteLine($"変換失敗: ({col},{resultRow}) = {lines[row][col]}");
+						result[col, resultRow] = -1; // fallback 値
+					}
+				}
+			}
+
+			return result;
 		}
 
 		// transform.position <=> m_cellインデックス変換

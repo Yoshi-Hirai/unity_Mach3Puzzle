@@ -35,6 +35,17 @@ namespace Match3Puzzle.Game
 			_cell[x, y] = cell;
 		}
 
+		public void CreateToGridWithType(int x, int y, int pieceType)
+		{
+			if (pieceType < 0 || _piecesPatterns.Length <= pieceType)
+			{
+				Debug.Log("Piece Type is out of range " + pieceType);
+				return;
+			}
+			GameObject cell = UnityEngine.Object.Instantiate(_piecesPatterns[pieceType], _grid.GetCellCenterWorld(new Vector3Int(x, y, 0)), Quaternion.identity);
+			_cell[x, y] = cell;
+		}
+
 		//	ピース処理関連
 		//	ピースを指定位置に生成し、ピースデータを管理する_cellへ代入する
 		//	Dropアニメーションの実行を指示する

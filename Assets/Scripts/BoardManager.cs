@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 
 namespace Match3Puzzle.Game
 {
@@ -54,6 +55,9 @@ namespace Match3Puzzle.Game
 		[SerializeField] private InputManager _inputManager;
 		[SerializeField] private int _debugSeed = 12345;
 		[SerializeField] private bool _useFixedSeed = true;
+
+		//	GameStateデバッグ表示用
+		[SerializeField] private TextMeshProUGUI _gameStateText;
 
 		private GameState _currentState = GameState.WaitingForInput;
 		private GameObject[,] _cell;        //	ピースデータの管理
@@ -120,8 +124,8 @@ namespace Match3Puzzle.Game
 					_tileMap.SetTile(new Vector3Int(x, y, 0), GroundPatterns[groundIndex]);
 
 					// ピースを生成し登録
-					_pieceSpawner.CreateToGridWithType(x, y, grid[x, y]);
-					//_pieceSpawner.CreateToGrid(x, y);
+					//_pieceSpawner.CreateToGridWithType(x, y, grid[x, y]);
+					_pieceSpawner.CreateToGrid(x, y);
 				}
 			}
 
@@ -202,9 +206,15 @@ namespace Match3Puzzle.Game
 					break;
 			}
 
+#if false
 			if (_currentState != tempState)
 			{
 				Debug.Log("Change State: " + tempState + "=>" + _currentState);
+			}
+#endif
+			if (_gameStateText != null)
+			{
+				_gameStateText.text = $"GameState: {_currentState}";
 			}
 		}
 

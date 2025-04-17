@@ -114,8 +114,8 @@ namespace Match3Puzzle.Game
 			_pieceRemover = new PieceRemover(_cell, ConvertFromTransformToCell);
 			_pieceSpawner = new PieceSpawner(_cell, PiecesPatterns, _grid, ConvertFromCellToTransform);
 
-			string path = Path.Combine(Application.dataPath, "Resources/locate01.csv");
-			int[,] grid = LoadInitialCsv(path);
+			TextAsset csvText = Resources.Load<TextAsset>("locate01");
+			int[,] grid = LoadInitialCsv(csvText);
 			for (int y = 0; y < Height; ++y)
 			{
 				for (int x = 0; x < Width; ++x)
@@ -125,8 +125,8 @@ namespace Match3Puzzle.Game
 					_tileMap.SetTile(new Vector3Int(x, y, 0), GroundPatterns[groundIndex]);
 
 					// ピースを生成し登録
-					//_pieceSpawner.CreateToGridWithType(x, y, grid[x, y]);
-					_pieceSpawner.CreateToGrid(x, y);
+					_pieceSpawner.CreateToGridWithType(x, y, grid[x, y]);
+					//_pieceSpawner.CreateToGrid(x, y);
 				}
 			}
 
@@ -408,24 +408,22 @@ namespace Match3Puzzle.Game
 		}
 
 		//	初期盤面用のCSVデータ読み込み
-		public static int[,] LoadInitialCsv(string filePath)
+		public static int[,] LoadInitialCsv(TextAsset csvText)
 		{
-			if (!File.Exists(filePath))
+			if (csvText == null)
 			{
-				Console.WriteLine("ファイルが見つかりません: " + filePath);
+				Debug.LogError("ファイルが見つかりません:LoadInitialCSV");
 				return null;
 			}
 
 			List<string[]> lines = new List<string[]>();
 
-			using (var reader = new StreamReader(filePath))
+			// 改行で行ごとに分割
+			string[] rawLines = csvText.text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+			foreach (string line in rawLines)
 			{
-				while (!reader.EndOfStream)
-				{
-					string line = reader.ReadLine();
-					string[] values = line.Split(',');
-					lines.Add(values);
-				}
+				string[] values = line.Split(',');
+				lines.Add(values);
 			}
 
 			int rowCount = lines.Count;
@@ -440,7 +438,7 @@ namespace Match3Puzzle.Game
 				{
 					if (!int.TryParse(lines[row][col], out result[col, resultRow]))
 					{
-						Console.WriteLine($"変換失敗: ({col},{resultRow}) = {lines[row][col]}");
+						Debug.LogError($"変換失敗: ({col},{resultRow}) = {lines[row][col]}");
 						result[col, resultRow] = -1; // fallback 値
 					}
 				}

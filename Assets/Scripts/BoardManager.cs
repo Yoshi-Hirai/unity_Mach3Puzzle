@@ -37,6 +37,7 @@ namespace Match3Puzzle.Game
 		}
 		private const float SwipeThreshold = 0.5f;              //	スワイプ判定閾値
 		private const int MatchThreshold = 3;                   //	マッチと判断されるピース数閾値
+		private const int MatchThresholdSquare = 2;				//	マッチと判断されるピース数閾値(Matched_Square)
 		private const int MaxFixInitialMatches = 64;            //	初期盤面の修正処理を実施する最大回数
 
 		//	Instanceプロパティの追加
@@ -266,14 +267,15 @@ namespace Match3Puzzle.Game
 		private void HandleMatching()
 		{
 			_matchedPieces = CheckPieceMatch();
-			Debug.Log("MatchPiece Count: " + _matchedPieces.Count);
+			//Debug.Log("MatchPiece Count: " + _matchedPieces.Count);
 			if (_matchedPieces.Count != 0)
 			{
 				// マッチしたピースに削除アニメーションを指示。アニメーション終了後、削除し_cellを更新
-				foreach (var (piece, _, _) in _matchedPieces)
+				foreach (var (piece, mType, _) in _matchedPieces)
 				{
 					// ピースのフェードアウト開始
 					piece.GetComponent<PieceView>().StartFade(PieceView.FadeState.FadingOut);
+					Debug.Log("Matched Type: " + (int)mType);
 				}
 				ChangeGameState(GameState.DeleteFading);
 			}
@@ -339,9 +341,21 @@ namespace Match3Puzzle.Game
 		}
 
 		//	MatchedType の判定
-		private static MatchedType DetermineMatchedType(int matchCount)
+		private static MatchedType DetermineMatchedType(int matchCount, bool isSquared, bool is5PiecesT, bool is5PiecesL)
 		{
-			if (matchCount == 3)
+			if (isSquared == true)
+			{
+				return MatchedType.Matched_Square;
+			}
+			else if (is5PiecesT == true)
+			{
+				return MatchedType.Matched_5PiecesT;
+			}
+			else if (is5PiecesL == true)
+			{
+				return MatchedType.Matched_5PiecesL;
+			}
+			else if (matchCount == 3)
 			{
 				return MatchedType.Matched_3Pieces;
 			}
@@ -492,8 +506,8 @@ namespace Match3Puzzle.Game
 			for (int y = 0; y < Height; y++)
 			{
 				int matchCount = 1; // 連続しているピースの数
-				List<GameObject> tempMatches = new List<GameObject>();
-				tempMatches.Add(_cell[0, y]);
+				List<(GameObject, int, int)> tempMatches = new List<(GameObject, int, int)>();
+				tempMatches.Add((_cell[0, y], 0, y));
 
 				for (int x = 1; x < Width; x++)
 				{
@@ -501,27 +515,134 @@ namespace Match3Puzzle.Game
 						_cell[x, y].tag == _cell[x - 1, y].tag)
 					{
 						matchCount++;
-						tempMatches.Add(_cell[x, y]);
+						tempMatches.Add((_cell[x, y], x, y));
+						//	Matched_Square判定(2個並びの一段上をチェック)
+						if (matchCount == MatchThresholdSquare && y < Height - 1) {
+							bool isMatchedSquare = true;
+							foreach (var (piece, pieceX, _) in tempMatches)
+							{
+								GameObject aboveCell = _cell[pieceX, y + 1];
+								if (aboveCell == null || piece == null || aboveCell.tag != _cell[pieceX, y].tag)
+								{
+									isMatchedSquare = false;
+									break;	
+								}
+							}
+							if (isMatchedSquare == true) {
+								foreach (var (_, pieceX, pieceY) in tempMatches)
+								{
+									MatchedType matchedType = DetermineMatchedType(matchCount, true, false, false);
+									matchedPieces.Add((_cell[pieceX, pieceY], matchedType, matchIndex));
+									matchedPieces.Add((_cell[pieceX, pieceY + 1], matchedType, matchIndex)); // 上側
+								}
+								matchIndex++;
+								matchCount = 1;
+								tempMatches.Clear();
+							}
+						}
+						//	ここまでMatched_Square判定(2個並びの一段上をチェック)
 					}
 					else
-					{
-						if (matchCount >= MatchThreshold)   // MatchThreshold以上並んでいたら追加
+					{	// MatchThreshold以上並んでいたら追加
+						if (matchCount == MatchThreshold)
 						{
-							MatchedType matchedType = DetermineMatchedType(matchCount);
-							foreach (var piece in tempMatches)
+							//	Matched_5PiecesT, L判定
+							bool isMatched5PiecesT = false;
+							bool isMatched5PiecesL = false;
+							for (int i = 0; i < tempMatches.Count; i++)
+							{
+								var (piece, pieceX, pieceY) = tempMatches[i];
+Debug.Log("Match3 First " + i + " x " + pieceX + " y " + pieceY);
+								//	T 両端:上下1ピースずつをチェック
+								if (i == 0 || i == 2)
+								{
+									if(0 <= pieceY - 1 && pieceY + 1 <= Height - 1)
+									{
+										GameObject belowCell = _cell[pieceX, pieceY - 1];
+										GameObject aboveCell = _cell[pieceX, pieceY + 1];
+										if(belowCell != null && aboveCell != null &&
+											belowCell.tag == piece.tag && aboveCell.tag == piece.tag)
+										{
+											isMatched5PiecesT = true;
+											tempMatches.Add((belowCell, pieceX, pieceY - 1));
+											tempMatches.Add((aboveCell, pieceX, pieceY + 1));
+											break;
+										}
+									}
+								}
+Debug.Log("Match3 " + i + " x " + pieceX + " y " + pieceY);
+								//	T 中央:上2ピース or 下2ピースをチェック
+								//	L 両端:上2ピース or 下2ピースをチェック
+								if(0 <= pieceY - 2)
+								{
+									GameObject belowCell1 = _cell[pieceX, pieceY - 1];
+									GameObject belowCell2 = _cell[pieceX, pieceY - 2];
+									if(belowCell1 != null && belowCell2 != null &&
+										belowCell1.tag == piece.tag && belowCell2.tag == piece.tag )
+									{
+										if(i == 1)
+										{
+											isMatched5PiecesT = true;
+										}
+										else
+										{
+											isMatched5PiecesL = true;
+										}
+										tempMatches.Add((belowCell1, pieceX, pieceY - 1));
+										tempMatches.Add((belowCell2, pieceX, pieceY - 2));
+										break;											
+									}
+								}
+								if(pieceY + 2 <= Height - 1)
+								{
+									GameObject aboveCell1 = _cell[pieceX, pieceY + 1];
+									GameObject aboveCell2 = _cell[pieceX, pieceY + 2];
+Debug.Log("tag " + piece.tag + " 1 " + aboveCell1.tag + " 2" + aboveCell2.tag);
+									if(aboveCell1 != null && aboveCell2 != null &&
+										aboveCell1.tag == piece.tag && aboveCell2.tag == piece.tag )
+									{
+										if(i == 1)
+										{
+											isMatched5PiecesT = true;
+										}
+										else
+										{
+											isMatched5PiecesL = true;
+										}
+										tempMatches.Add((aboveCell1, pieceX, pieceY + 1));
+										tempMatches.Add((aboveCell2, pieceX, pieceY + 2));
+										break;											
+									}
+								}
+							}
+							//	ここまで
+
+							//	Matched_5PiecesL
+							//	ここまで
+
+							MatchedType matchedType = DetermineMatchedType(matchCount, false, isMatched5PiecesT, isMatched5PiecesL);
+							Debug.Log("Type :" + matchedType + " " + isMatched5PiecesT + " " + isMatched5PiecesL);
+							foreach (var (piece, _, _) in tempMatches)
+								matchedPieces.Add((piece, matchedType, matchIndex));
+							matchIndex++;
+						}
+						else if (matchCount > MatchThreshold)
+						{
+							MatchedType matchedType = DetermineMatchedType(matchCount, false, false, false);
+							foreach (var (piece, _, _) in tempMatches)
 								matchedPieces.Add((piece, matchedType, matchIndex));
 							matchIndex++;
 						}
 						matchCount = 1;
 						tempMatches.Clear();
-						tempMatches.Add(_cell[x, y]);
+						tempMatches.Add((_cell[x, y], x, y));
 					}
 				}
 
 				if (matchCount >= MatchThreshold) // ループ終了時もチェック
 				{
-					MatchedType matchedType = DetermineMatchedType(matchCount);
-					foreach (var piece in tempMatches)
+					MatchedType matchedType = DetermineMatchedType(matchCount, false, false, false);
+					foreach (var (piece, _, _) in tempMatches)
 						matchedPieces.Add((piece, matchedType, matchIndex));
 					matchIndex++;
 				}
@@ -531,8 +652,8 @@ namespace Match3Puzzle.Game
 			for (int x = 0; x < Width; x++)
 			{
 				int matchCount = 1;
-				List<GameObject> tempMatches = new List<GameObject>();
-				tempMatches.Add(_cell[x, 0]);
+				List<(GameObject, int, int)> tempMatches = new List<(GameObject, int, int)>();
+				tempMatches.Add((_cell[x, 0], x, 0));
 
 				for (int y = 1; y < Height; y++)
 				{
@@ -540,27 +661,27 @@ namespace Match3Puzzle.Game
 						_cell[x, y].tag == _cell[x, y - 1].tag)
 					{
 						matchCount++;
-						tempMatches.Add(_cell[x, y]);
+						tempMatches.Add((_cell[x, y], x, y));
 					}
 					else
 					{
 						if (matchCount >= MatchThreshold)
 						{
-							MatchedType matchedType = DetermineMatchedType(matchCount);
-							foreach (var piece in tempMatches)
+							MatchedType matchedType = DetermineMatchedType(matchCount, false, false, false);
+							foreach (var (piece, _, _) in tempMatches)
 								matchedPieces.Add((piece, matchedType, matchIndex));
 							matchIndex++;
 						}
 						matchCount = 1;
 						tempMatches.Clear();
-						tempMatches.Add(_cell[x, y]);
+						tempMatches.Add((_cell[x, y], x, y));
 					}
 				}
 
 				if (matchCount >= MatchThreshold)
 				{
-					MatchedType matchedType = DetermineMatchedType(matchCount);
-					foreach (var piece in tempMatches)
+					MatchedType matchedType = DetermineMatchedType(matchCount, false, false, false);
+					foreach (var (piece, _ ,_) in tempMatches)
 						matchedPieces.Add((piece, matchedType, matchIndex));
 					matchIndex++;
 				}

@@ -11,6 +11,12 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Match3Scene.unity
     guid: ad799588b3915474596adb7a161ea016
+  - enabled: 0
+    path: Assets/Scenes/TitleScene.unity
+    guid: a6a30337f151e9941864e0e648a8909e
+  - enabled: 0
+    path: Assets/Scenes/SaidanMainScene.unity
+    guid: 1bc819c5daa9d0940ad32a54438509bd
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
   m_UseUCBPForAssetBundles: 0
